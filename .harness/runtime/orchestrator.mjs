@@ -20,7 +20,7 @@ const HARNESS_DIR = join(PROJECT_ROOT, '.harness');
 const ARTIFACTS_DIR = join(HARNESS_DIR, 'artifacts');
 const RUNTIME_DIR = join(HARNESS_DIR, 'runtime');
 
-const { values: flags } = parseArgs({
+const { values: flags, positionals } = parseArgs({
   options: {
     template: { type: 'string', short: 't' },
     'dry-run': { type: 'boolean' },
@@ -31,7 +31,7 @@ const { values: flags } = parseArgs({
 });
 
 const TEMPLATE_PATH = flags.template
-  || process.argv[2]
+  || (positionals.length > 0 ? positionals[0] : null)
   || join(HARNESS_DIR, 'task_template.md');
 
 const DRY_RUN = flags['dry-run'] || false;
