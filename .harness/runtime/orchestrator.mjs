@@ -12,6 +12,7 @@ import { readFileSync, writeFileSync, existsSync, symlinkSync, unlinkSync } from
 import { join, resolve } from 'path';
 import { execSync, spawn } from 'child_process';
 import { parseArgs } from 'util';
+import { createHash } from 'crypto';
 
 // ─── Config ───
 
@@ -377,24 +378,61 @@ function extractAndAppendLearnings(reviewContent, timestamp) {
   success(`Learnings 갱신: ${criticals.length} critical, ${warnings.length} warning 항목 추가`);
 }
 
-// ─── Integrity Check ───
+// ─── Integrity Check (pure Node.js) ───
 
 function checkIntegrity() {
-  const script = join(HARNESS_DIR, 'scripts', 'verify-integrity.sh');
-  if (!existsSync(script)) return true;
+  const checksumFile = join(HARNESS_DIR, '.checksums');
+  if (!existsSync(checksumFile)) return true;
 
-  const checksums = join(HARNESS_DIR, '.checksums');
-  if (!existsSync(checksums)) return true;
+  const lines = readFileSync(checksumFile, 'utf-8').trim().split('\n');
+  let allGood = true;
 
-  try {
-    execSync(`bash "${script}" --check`, {
-      cwd: PROJECT_ROOT,
-      stdio: VERBOSE ? 'inherit' : 'ignore',
-    });
-    return true;
-  } catch {
-    return false;
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const [expectedHash, filepath] = line.trim().split(/\s+/);
+    if (!filepath || !expectedHash) continue;
+
+    if (!existsSync(filepath)) {
+      fail(`삭제됨: ${filepath}`);
+      allGood = false;
+      continue;
+    }
+
+    const content = readFileSync(filepath);
+    const actualHash = createHash('sha256').update(content).digest('hex');
+
+    if (expectedHash !== actualHash) {
+      fail(`변조됨: ${filepath}`);
+      allGood = false;
+    } else {
+      debug(`정상: ${filepath}`);
+    }
   }
+
+  return allGood;
+}
+
+function initChecksums() {
+  const protectedFiles = [
+    join(PROJECT_ROOT, 'AGENTS.md'),
+    join(PROJECT_ROOT, '.claude', 'CLAUDE.md'),
+    join(HARNESS_DIR, 'task_template.md'),
+    join(HARNESS_DIR, 'config.yaml'),
+    join(HARNESS_DIR, 'roles', 'planner.md'),
+    join(HARNESS_DIR, 'roles', 'implementer.md'),
+    join(HARNESS_DIR, 'roles', 'reviewer.md'),
+  ];
+
+  const lines = [];
+  for (const filepath of protectedFiles) {
+    if (!existsSync(filepath)) continue;
+    const content = readFileSync(filepath);
+    const hash = createHash('sha256').update(content).digest('hex');
+    lines.push(`${hash}  ${filepath}`);
+  }
+
+  writeFileSync(join(HARNESS_DIR, '.checksums'), lines.join('\n') + '\n', 'utf-8');
+  success('체크섬 초기화 완료');
 }
 
 // ─── Main Pipeline ───
