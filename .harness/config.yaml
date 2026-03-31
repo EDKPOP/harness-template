@@ -1,0 +1,78 @@
+# Harness Pipeline Configuration
+
+project:
+  name: "harness-template"
+  description: "멀티 에이전트 하네스 템플릿"
+
+# 에이전트별 설정
+agents:
+  planner:
+    engine: gemini
+    command: "gemini --approval-mode plan"
+    role_file: ".harness/roles/planner.md"
+    output_prefix: "plan"
+    timeout: 300  # 5분
+
+  implementer:
+    engine: claude
+    command: "claude --permission-mode bypassPermissions --print"
+    role_file: ".harness/roles/implementer.md"
+    output_prefix: "impl"
+    timeout: 600  # 10분
+
+  reviewer:
+    engine: codex
+    command: "codex exec"
+    role_file: ".harness/roles/reviewer.md"
+    output_prefix: "review"
+    timeout: 300  # 5분
+
+# 파이프라인 설정
+pipeline:
+  phases:
+    - name: plan
+      agent: planner
+      inputs:
+        - task_template.md
+      outputs:
+        - ".harness/artifacts/plan-{timestamp}.md"
+
+    - name: implement
+      agent: implementer
+      inputs:
+        - task_template.md
+        - ".harness/artifacts/plan-latest.md"
+        - ".harness/artifacts/review-latest.md"  # 반복 시
+      outputs:
+        - ".harness/artifacts/impl-{timestamp}.md"
+
+    - name: review
+      agent: reviewer
+      inputs:
+        - task_template.md
+        - ".harness/artifacts/plan-latest.md"
+        - "git diff"  # 코드 변경사항
+      outputs:
+        - ".harness/artifacts/review-{timestamp}.md"
+
+  # 반복 루프 설정
+  loop:
+    max_iterations: 3
+    retry_on:
+      - "CRITICAL"    # Critical 이슈가 있으면 재시도
+    pass_on:
+      - "PASS"        # 리뷰 통과
+      - "WARNING_ONLY" # Warning만 있으면 통과
+
+  # 완료 후 동작
+  on_complete:
+    - "git add -A"
+    - "git commit -m 'feat: {task_name} - implemented via harness pipeline'"
+    # - "git push origin main"  # 배포 시 주석 해제
+
+# 산출물 관리
+artifacts:
+  directory: ".harness/artifacts"
+  timestamp_format: "%Y%m%d-%H%M"
+  keep_history: true  # 이전 산출물 보존
+  symlink_latest: true  # plan-latest.md → 가장 최근 파일 심링크
