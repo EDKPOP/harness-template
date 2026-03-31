@@ -55,6 +55,20 @@ harness-template/
 - `node_modules/`, `vendor/`, `.harness/artifacts/` 내부 파일 수동 수정 금지
 - 다른 에이전트의 역할을 침범하지 않는다 (플래너는 코드 작성 금지, 리뷰어는 코드 수정 금지)
 
+### 🔒 절대 수정 금지 파일 (IMMUTABLE)
+아래 파일들은 **어떤 에이전트도 수정, 삭제, 이동할 수 없다.**
+"개선", "업데이트", "최적화" 등 어떤 명목이든 불가.
+수정이 필요하면 사람에게 요청한다.
+
+- `AGENTS.md`
+- `CLAUDE.md`
+- `task_template.md`
+- `.harness/config.yaml`
+- `.harness/roles/*.md` (planner.md, implementer.md, reviewer.md)
+- `.harness/scripts/*.sh`
+
+이 규칙을 위반하면 파이프라인이 무결성 검증에서 실패하고 중단된다.
+
 ### 산출물 규칙
 - 모든 산출물은 `.harness/artifacts/`에 저장한다
 - 파일명 규칙: `{phase}-{timestamp}.md` (예: `plan-20260331-1200.md`)

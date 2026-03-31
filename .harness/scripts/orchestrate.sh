@@ -38,6 +38,18 @@ done
 
 cd "$PROJECT_ROOT"
 
+# ─── 무결성 검증 & 보호 ───
+if [ -f "$SCRIPT_DIR/verify-integrity.sh" ] && [ -f "$PROJECT_ROOT/.harness/.checksums" ]; then
+    log "하네스 파일 무결성 검증 중..."
+    "$SCRIPT_DIR/verify-integrity.sh" --check || {
+        fail "하네스 파일이 변조되었습니다. 파이프라인을 중단합니다."
+        fail "git checkout -- AGENTS.md CLAUDE.md .harness/roles/ 로 복원하세요."
+        exit 1
+    }
+fi
+
+"$SCRIPT_DIR/protect.sh"
+
 log "=== Harness Pipeline 시작 ==="
 log "Template: $TEMPLATE"
 log "Timestamp: $TIMESTAMP"
@@ -104,6 +116,13 @@ if [ "$VERDICT" = "PASS" ] || [ "$VERDICT" = "WARNING_ONLY" ]; then
     git add -A
     TASK_NAME=$(head -5 "$TEMPLATE" | grep -oP '##\s*프로젝트명\s*\n\K.*' || echo "harness task")
     git commit -m "feat: $TASK_NAME — implemented via harness pipeline (iterations: $ITERATION)" || true
+    # 무결성 재검증
+    if [ -f "$PROJECT_ROOT/.harness/.checksums" ]; then
+        "$SCRIPT_DIR/verify-integrity.sh" --check || {
+            warn "파이프라인 중 하네스 파일이 변조되었습니다! 커밋은 했지만 확인이 필요합니다."
+        }
+    fi
+    "$SCRIPT_DIR/unprotect.sh"
     success "커밋 완료. 배포 준비 상태입니다."
 else
     fail "=== 파이프라인 실패 ==="
