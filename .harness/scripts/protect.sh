@@ -11,11 +11,11 @@ echo "[harness] 보호 모드 활성화..."
 
 # 1. 하네스 설정 파일들을 읽기 전용으로 변경
 chmod 444 "$PROJECT_ROOT/AGENTS.md"
-chmod 444 "$PROJECT_ROOT/CLAUDE.md"
+chmod 444 "$PROJECT_ROOT/.claude/CLAUDE.md"
 chmod 444 "$PROJECT_ROOT/.harness/config.yaml"
 chmod 444 "$PROJECT_ROOT/.harness/roles/"*.md
 chmod 555 "$PROJECT_ROOT/.harness/scripts/"*.sh
-chmod 444 "$PROJECT_ROOT/task_template.md"
+chmod 444 "$PROJECT_ROOT/.harness/task_template.md"
 
 # 2. 보호 상태 기록
 echo "$(date +%Y%m%d-%H%M%S)" > "$PROJECT_ROOT/.harness/.protected"

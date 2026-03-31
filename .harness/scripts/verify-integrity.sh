@@ -11,8 +11,8 @@ CHECKSUM_FILE="$PROJECT_ROOT/.harness/.checksums"
 # 보호 대상 파일 목록
 PROTECTED_FILES=(
     "AGENTS.md"
-    "CLAUDE.md"
-    "task_template.md"
+    ".claude/CLAUDE.md"
+    ".harness/task_template.md"
     ".harness/config.yaml"
     ".harness/roles/planner.md"
     ".harness/roles/implementer.md"

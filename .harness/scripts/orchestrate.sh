@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ARTIFACTS="$PROJECT_ROOT/.harness/artifacts"
-TEMPLATE="${1:-$PROJECT_ROOT/task_template.md}"
+TEMPLATE="${1:-$PROJECT_ROOT/.harness/task_template.md}"
 TIMESTAMP=$(date +%Y%m%d-%H%M)
 MAX_ITERATIONS=3
 

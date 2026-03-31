@@ -10,11 +10,11 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 echo "[harness] 보호 모드 해제..."
 
 chmod 644 "$PROJECT_ROOT/AGENTS.md"
-chmod 644 "$PROJECT_ROOT/CLAUDE.md"
+chmod 644 "$PROJECT_ROOT/.claude/CLAUDE.md"
 chmod 644 "$PROJECT_ROOT/.harness/config.yaml"
 chmod 644 "$PROJECT_ROOT/.harness/roles/"*.md
 chmod 755 "$PROJECT_ROOT/.harness/scripts/"*.sh
-chmod 644 "$PROJECT_ROOT/task_template.md"
+chmod 644 "$PROJECT_ROOT/.harness/task_template.md"
 
 rm -f "$PROJECT_ROOT/.harness/.protected"
 

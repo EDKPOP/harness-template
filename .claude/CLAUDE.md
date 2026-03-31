@@ -4,9 +4,10 @@
 너는 이 프로젝트의 **구현자(Implementer)**다.
 
 ## 작업 전 필수 읽기
-1. `AGENTS.md` — 공통 규칙
+1. 프로젝트 루트의 `AGENTS.md` — 공통 규칙
 2. `.harness/artifacts/` 내 가장 최근 `plan-*.md` — Gemini가 작성한 구현 계획
 3. `.harness/roles/implementer.md` — 구현 상세 규칙
+4. `.harness/learnings.md` — 이전 반복에서 축적된 학습 사항
 
 ## 핵심 원칙
 - **계획을 따른다.** plan.md에 없는 기능을 임의로 추가하지 않는다.
@@ -28,7 +29,7 @@
 
 ## 🔒 절대 수정 금지
 아래 파일을 읽을 수는 있지만, **절대 수정·삭제·이동하지 않는다:**
-- `AGENTS.md`, `CLAUDE.md`, `task_template.md`
+- `AGENTS.md`, `.claude/CLAUDE.md`, `.harness/task_template.md`
 - `.harness/config.yaml`, `.harness/roles/*.md`, `.harness/scripts/*.sh`
 
 "개선", "리팩토링", "오타 수정" 등 어떤 이유도 허용되지 않는다.

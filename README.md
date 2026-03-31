@@ -9,11 +9,39 @@
 - **Codex** → 코드 리뷰 (품질 검증, 계획 준수 확인)
 - **OpenClaw** → 오케스트레이션 (파이프라인 관리, 레포 관리, 배포)
 
+## 폴더 구조
+
+```
+project/
+├── AGENTS.md                  ← 공통 규칙 (유일한 루트 노출 파일)
+├── .claude/
+│   └── CLAUDE.md              ← Claude Code 전용 지시서
+├── .harness/
+│   ├── config.yaml            ← 파이프라인 설정
+│   ├── task_template.md       ← 요구사항 작성 템플릿
+│   ├── learnings.md           ← 누적 학습 기록
+│   ├── roles/
+│   │   ├── planner.md         ← Gemini 전용
+│   │   ├── implementer.md     ← Claude 전용
+│   │   └── reviewer.md        ← Codex 전용
+│   ├── scripts/
+│   │   ├── orchestrate.sh     ← 전체 파이프라인
+│   │   ├── plan.sh            ← Phase 1
+│   │   ├── implement.sh       ← Phase 2
+│   │   ├── review.sh          ← Phase 3
+│   │   ├── loop.sh            ← 반복 루프
+│   │   ├── protect.sh         ← 파일 보호
+│   │   ├── unprotect.sh       ← 보호 해제
+│   │   └── verify-integrity.sh ← 무결성 검증
+│   └── artifacts/             ← 산출물 (타임스탬프별)
+└── src/                       ← 프로젝트 소스코드
+```
+
 ## 사용법
 
 ### 1. 요구사항 작성
 
-`task_template.md`를 편집하여 만들고 싶은 것을 기술한다.
+`.harness/task_template.md`를 편집하여 만들고 싶은 것을 기술한다.
 
 ### 2. 전체 파이프라인 실행
 
@@ -26,21 +54,33 @@ chmod +x .harness/scripts/*.sh
 
 ```bash
 # 플래닝만
-.harness/scripts/plan.sh task_template.md
+.harness/scripts/plan.sh .harness/task_template.md
 
 # 구현만 (plan이 존재해야 함)
-.harness/scripts/implement.sh task_template.md
+.harness/scripts/implement.sh .harness/task_template.md
 
 # 리뷰만 (구현 후)
-.harness/scripts/review.sh task_template.md
+.harness/scripts/review.sh .harness/task_template.md
 
 # 구현↔리뷰 반복 루프만
-.harness/scripts/loop.sh task_template.md 3
+.harness/scripts/loop.sh .harness/task_template.md 3
 ```
 
-### 4. 산출물 확인
+### 4. 무결성 관리
 
-`.harness/artifacts/` 폴더에 각 단계의 산출물이 타임스탬프와 함께 저장된다.
+```bash
+# 체크섬 초기화 (하네스 파일 변경 후)
+.harness/scripts/verify-integrity.sh --init
+
+# 무결성 검증
+.harness/scripts/verify-integrity.sh --check
+
+# 수동 편집 시
+.harness/scripts/unprotect.sh   # 잠금 해제
+# ... 편집 ...
+.harness/scripts/protect.sh     # 다시 잠금
+.harness/scripts/verify-integrity.sh --init  # 체크섬 갱신
+```
 
 ## 사전 요구사항
 
@@ -50,27 +90,26 @@ chmod +x .harness/scripts/*.sh
 - Git
 - 각 서비스의 API 키 설정
 
-## 커스터마이징
-
-1. `AGENTS.md`의 기술 스택 섹션을 프로젝트에 맞게 수정
-2. `.harness/roles/*.md`에서 각 에이전트의 세부 규칙 조정
-3. `.harness/config.yaml`에서 타임아웃, 반복 횟수 등 설정
-4. `CLAUDE.md`에 Claude 전용 추가 지시 작성
-
 ## 파이프라인 흐름
 
 ```
-task_template.md
+.harness/task_template.md
     ↓
 [Plan] Gemini → plan.md
     ↓
-[Implement] Claude → 코드 + impl.md
+[Implement] Claude → 코드 + impl.md  ← learnings.md 참조
     ↓
 [Review] Codex → review.md
     ↓
-  PASS? ──yes──→ 커밋 & 배포
+  PASS? ──yes──→ learnings.md 갱신 → 커밋 & 배포
     │
    no (최대 3회)
     │
     └──→ [Implement] 피드백 반영 → [Review] 재검증 → ...
 ```
+
+## 보호 장치
+
+- **파일 권한**: 파이프라인 중 하네스 파일 읽기 전용 (chmod 444)
+- **체크섬 검증**: SHA-256으로 변조 감지, 변조 시 파이프라인 중단
+- **규칙 명시**: AGENTS.md에 절대 수정 금지 파일 목록 명시

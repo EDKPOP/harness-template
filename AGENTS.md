@@ -17,10 +17,12 @@
 ```
 harness-template/
 ├── AGENTS.md              ← 이 파일 (공통 규칙)
-├── CLAUDE.md              ← Claude Code 전용 지시서
-├── task_template.md       ← 사용자가 작성하는 요구사항 정의서
+├── .claude/
+│   └── CLAUDE.md          ← Claude Code 전용 지시서
 ├── .harness/
+│   ├── task_template.md   ← 사용자가 작성하는 요구사항 정의서
 │   ├── config.yaml        ← 파이프라인 설정
+│   ├── learnings.md       ← 누적 학습 (에이전트 패턴/실수 기록)
 │   ├── roles/
 │   │   ├── planner.md     ← Gemini 플래닝 지시서
 │   │   ├── implementer.md ← Claude 구현 지시서
@@ -61,8 +63,8 @@ harness-template/
 수정이 필요하면 사람에게 요청한다.
 
 - `AGENTS.md`
-- `CLAUDE.md`
-- `task_template.md`
+- `.claude/CLAUDE.md`
+- `.harness/task_template.md`
 - `.harness/config.yaml`
 - `.harness/roles/*.md` (planner.md, implementer.md, reviewer.md)
 - `.harness/scripts/*.sh`
@@ -76,7 +78,7 @@ harness-template/
 
 ### 파이프라인 흐름
 ```
-task_template.md
+.harness/task_template.md
     ↓
 [Phase 1: Plan] → Gemini → artifacts/plan-*.md
     ↓
