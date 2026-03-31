@@ -43,27 +43,34 @@ project/
 
 `.harness/task_template.md`를 편집하여 만들고 싶은 것을 기술한다.
 
-### 2. 전체 파이프라인 실행
+### 2. 파이프라인 실행
 
+**방법 A: Node.js 런타임 (권장)**
+```bash
+node .harness/runtime/orchestrator.mjs
+```
+
+옵션:
+```bash
+# 커스텀 템플릿
+node .harness/runtime/orchestrator.mjs -t path/to/template.md
+
+# 드라이런 (실제 에이전트 호출 없이 흐름 확인)
+node .harness/runtime/orchestrator.mjs --dry-run
+
+# 상세 로그
+node .harness/runtime/orchestrator.mjs --verbose
+```
+
+**방법 B: OpenClaw 오케스트레이션**
+OpenClaw 환경에서 "하네스 실행"을 요청하면 `.harness/skill/SKILL.md`에 따라
+`sessions_spawn`으로 각 에이전트 세션을 관리한다.
+에이전트 간 실시간 메시지 전달과 학습 주입이 자동으로 이루어진다.
+
+**방법 C: sh 스크립트 (레거시)**
 ```bash
 chmod +x .harness/scripts/*.sh
 .harness/scripts/orchestrate.sh
-```
-
-### 3. 개별 단계 실행
-
-```bash
-# 플래닝만
-.harness/scripts/plan.sh .harness/task_template.md
-
-# 구현만 (plan이 존재해야 함)
-.harness/scripts/implement.sh .harness/task_template.md
-
-# 리뷰만 (구현 후)
-.harness/scripts/review.sh .harness/task_template.md
-
-# 구현↔리뷰 반복 루프만
-.harness/scripts/loop.sh .harness/task_template.md 3
 ```
 
 ### 4. 무결성 관리
@@ -113,3 +120,18 @@ chmod +x .harness/scripts/*.sh
 - **파일 권한**: 파이프라인 중 하네스 파일 읽기 전용 (chmod 444)
 - **체크섬 검증**: SHA-256으로 변조 감지, 변조 시 파이프라인 중단
 - **규칙 명시**: AGENTS.md에 절대 수정 금지 파일 목록 명시
+
+## 학습 축적
+
+`.harness/learnings.md`에 리뷰 반복 과정에서 발견된 패턴이 자동 기록된다.
+- 리뷰의 CRITICAL/WARNING 이슈를 자동 추출
+- 다음 구현 Phase에 컨텍스트로 주입
+- 프로젝트를 거듭할수록 품질이 향상되는 구조
+
+## 실행 모드
+
+| 모드 | 명령 | 에이전트 소통 | 학습 전달 |
+|------|------|---------------|-----------|
+| Node.js | `node .harness/runtime/orchestrator.mjs` | 파일 기반 | 자동 |
+| OpenClaw | 스킬 시스템 | 실시간 (sessions_send) | 자동 + 실시간 |
+| sh 스크립트 | `.harness/scripts/orchestrate.sh` | 파일 기반 | 수동 |

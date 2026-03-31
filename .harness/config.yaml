@@ -76,3 +76,15 @@ artifacts:
   timestamp_format: "%Y%m%d-%H%M"
   keep_history: true  # 이전 산출물 보존
   symlink_latest: true  # plan-latest.md → 가장 최근 파일 심링크
+
+# 학습 축적
+learnings:
+  file: ".harness/learnings.md"
+  auto_extract: true  # 리뷰에서 자동 추출
+  inject_to_implement: true  # 구현 Phase에 자동 주입
+
+# 실행 방법
+runtime:
+  # "node" → node .harness/runtime/orchestrator.mjs
+  # "openclaw" → OpenClaw 스킬 시스템으로 실행
+  mode: "node"
