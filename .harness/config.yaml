@@ -1,31 +1,37 @@
-# Harness Pipeline Configuration
-# 이 파일은 OpenClaw 스킬의 대화형 설정(`harness init`)을 통해 생성됩니다.
-# 직접 편집해도 되지만, 스킬을 통해 생성하는 것을 권장합니다.
+# Harness Pipeline Configuration v2.0
+# Initializer Agent가 프로젝트 설정 시 이 파일을 채웁니다.
+# 직접 편집해도 됩니다.
+
+# 하네스 메타데이터
+harness:
+  version: "2.0"        # vibecoding 스킬 버전
+  created_at: ""         # 생성일 (Initializer가 채움)
+  last_migrated: null    # 마이그레이션 일시
 
 project:
-  name: ""          # 프로젝트명 (harness init 시 설정)
-  description: ""   # 프로젝트 설명
+  name: ""               # 프로젝트명
+  description: ""        # 프로젝트 설명
 
-# 기술 스택 (harness init 시 설정)
+# 기술 스택
 stack:
-  language: ""      # typescript | python | go | rust | java | etc.
-  runtime: ""       # node 20+ | python 3.12+ | go 1.22+ | etc.
-  framework: ""     # next.js | fastapi | gin | etc.
-  test: ""          # vitest | pytest | go test | etc.
-  package_manager: "" # pnpm | npm | pip | go mod | cargo | etc.
+  language: ""           # typescript | python | go | rust | java
+  runtime: ""            # node 20+ | python 3.12+ | go 1.22+
+  framework: ""          # next.js | fastapi | gin | 없음
+  test: ""               # vitest | pytest | go test
+  package_manager: ""    # pnpm | npm | pip | cargo
 
-# 에이전트별 설정
+# 에이전트 설정
 agents:
   planner:
-    engine: gemini  # gemini | claude | codex | any
+    engine: gemini       # gemini | claude | codex
     role_file: ".harness/roles/planner.md"
 
   implementer:
-    engine: claude   # gemini | claude | codex | any
+    engine: claude
     role_file: ".harness/roles/implementer.md"
 
   reviewer:
-    engine: codex    # gemini | claude | codex | any
+    engine: codex
     role_file: ".harness/roles/reviewer.md"
 
 # 파이프라인 설정
@@ -35,12 +41,14 @@ pipeline:
     - implement
     - review
 
+  scale: project         # hotfix | feature | project
+
   loop:
     max_iterations: 3
     pass_on:
       - "PASS"
       - "WARNING_ONLY"
-    fail_action: "notify"  # notify | stop
+    fail_action: "notify" # notify | stop
 
 # 산출물 관리
 artifacts:

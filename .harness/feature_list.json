@@ -1,0 +1,13 @@
+[
+  {
+    "id": "feat-001",
+    "category": "example",
+    "description": "예시 기능 — Initializer Agent가 이 파일을 프로젝트 요구사항에 맞게 교체합니다",
+    "steps": [
+      "이 파일은 템플릿 예시입니다",
+      "Initializer Agent가 app_spec을 분석하여 실제 기능 목록을 생성합니다"
+    ],
+    "passes": false,
+    "priority": 1
+  }
+]

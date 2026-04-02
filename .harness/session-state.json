@@ -1,0 +1,11 @@
+{
+  "taskId": null,
+  "status": "idle",
+  "phase": null,
+  "mode": null,
+  "iteration": 0,
+  "maxIterations": 3,
+  "summary": "초기 상태",
+  "startedAt": null,
+  "lastUpdate": null
+}
