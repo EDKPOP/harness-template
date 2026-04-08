@@ -7,6 +7,7 @@ import { execSync } from 'child_process';
 import { loadJson, saveJson, normalizeFailureSignature, updateFailureTracking, markProgress } from './state.mjs';
 import { appendCheckpoint } from './checkpoints.mjs';
 import { recommendIntervention, summarizeStatus } from './status.mjs';
+import { appendNotification, writeLatestNotification, buildPhaseEvent } from './notifications.mjs';
 import { loadQualityGates, runQualityGates } from './gates.mjs';
 import { loadAuditSpec, runAudit } from './audit.mjs';
 import { runClaude } from './adapters/claude.mjs';
@@ -295,6 +296,9 @@ async function main() {
   const auditSpec = loadAuditSpec(join(HARNESS_DIR, 'audit-spec.json'));
   const auditResult = runAudit({ spec: auditSpec, projectRoot: PROJECT_ROOT, harnessDir: HARNESS_DIR });
   writeArtifact('audit', timestamp, JSON.stringify(auditResult, null, 2));
+  const auditEvent = buildPhaseEvent('audit', auditResult.verdict === 'PASS' ? 'completed' : 'failed', auditResult.verdict === 'PASS' ? 'Audit passed' : `Audit failed: ${(auditResult.top_actions || []).join('; ')}`, { topActions: auditResult.top_actions || [] });
+  appendNotification(HARNESS_DIR, auditEvent);
+  writeLatestNotification(HARNESS_DIR, auditEvent);
   debug(`audit verdict=${auditResult.verdict}`);
   if (auditResult.verdict !== 'PASS') {
     state.status = 'failed';
@@ -319,6 +323,9 @@ async function main() {
   saveState(nextState);
 
   const plan = runPlanning(config, timestamp, discovery);
+  const planEvent = buildPhaseEvent('plan', 'completed', 'Planning completed', { verdict: extractVerdict(plan) });
+  appendNotification(HARNESS_DIR, planEvent);
+  writeLatestNotification(HARNESS_DIR, planEvent);
   debug(`plan verdict=${extractVerdict(plan)}`);
   nextState = loadState();
   nextState = markProgress({ ...nextState, phase: 'implement', activeRole: 'implementer' }, 'plan complete');
@@ -340,6 +347,9 @@ async function main() {
     saveState(loopState);
 
     const implOutput = runImplementation(config, getTimestamp(), plan, reviewOutput, gateOutput);
+    const implEvent = buildPhaseEvent('implement', 'completed', 'Implementation step finished', { iteration: loopState.iteration, verdict: extractVerdict(implOutput) });
+    appendNotification(HARNESS_DIR, implEvent);
+    writeLatestNotification(HARNESS_DIR, implEvent);
     debug(`impl verdict=${extractVerdict(implOutput)}`);
 
     loopState = loadState();
@@ -353,6 +363,9 @@ async function main() {
     const routing = config.pipeline?.role_routing || {};
     gateOutput = JSON.stringify(gateResult, null, 2);
     writeArtifact('gate', getTimestamp(), gateOutput);
+    const gateEvent = buildPhaseEvent('gate', gateResult.verdict === 'FAIL' ? 'failed' : gateResult.verdict === 'PENDING' ? 'paused' : 'completed', `Gate ${gateResult.verdict}`, { verdict: gateResult.verdict });
+    appendNotification(HARNESS_DIR, gateEvent);
+    writeLatestNotification(HARNESS_DIR, gateEvent);
 
     loopState.lastGateResult = gateResult.verdict;
     if (gateResult.verdict === 'PENDING') {
@@ -385,6 +398,9 @@ async function main() {
     saveState(loopState);
 
     reviewOutput = runReview(config, getTimestamp(), plan, gateOutput);
+    const reviewEvent = buildPhaseEvent('review', 'completed', 'Review finished', { verdict: extractVerdict(reviewOutput) });
+    appendNotification(HARNESS_DIR, reviewEvent);
+    writeLatestNotification(HARNESS_DIR, reviewEvent);
     debug(`review raw=${JSON.stringify(reviewOutput)}`);
     verdict = extractVerdict(reviewOutput);
     loopState.lastReviewResult = verdict;
@@ -438,7 +454,11 @@ async function main() {
   finalState.summary = `pipeline finished with ${effectiveVerdict}`;
   finalState.recommendedIntervention = recommendIntervention(finalState);
   saveState(finalState);
-  writeArtifact('status', getTimestamp(), JSON.stringify(summarizeStatus(finalState), null, 2));
+  const finalStatus = summarizeStatus(finalState);
+  writeArtifact('status', getTimestamp(), JSON.stringify(finalStatus, null, 2));
+  const finalEvent = buildPhaseEvent('final', finalState.status, finalState.summary, finalStatus);
+  appendNotification(HARNESS_DIR, finalEvent);
+  writeLatestNotification(HARNESS_DIR, finalEvent);
 
   debug(`final verdict=${effectiveVerdict}`);
   debug(`final status=${finalState.status}`);
