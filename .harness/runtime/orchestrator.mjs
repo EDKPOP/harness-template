@@ -241,6 +241,25 @@ function maybeRunAnalyzer(config, timestamp, kind, reviewOutput, gateOutput) {
 }
 
 
+
+function appendLearningRecord(kind, reason, sourceText = '') {
+  const path = join(HARNESS_DIR, 'learnings.md');
+  const line = `- [${kind}] ${reason}: ${String(sourceText || '').slice(0, 180).replace(/\n/g, ' ')}\n`;
+  try {
+    const prev = readFile(path) || '# Learnings\n\n';
+    writeFileSync(path, prev + line, 'utf-8');
+  } catch {}
+}
+
+function promotePatternOrInstinct(reviewOutput, count) {
+  if ((count || 0) >= 3) {
+    appendInstinctCandidate(reviewOutput);
+    appendLearningRecord('instinct-candidate', 'repeated failure reached instinct threshold', reviewOutput);
+  } else if ((count || 0) >= 2) {
+    appendLearningRecord('pattern-candidate', 'repeated failure reached pattern threshold', reviewOutput);
+  }
+}
+
 function appendInstinctCandidate(reviewOutput) {
   const instinctsDir = join(HARNESS_DIR, 'instincts');
   const path = join(instinctsDir, 'auto-candidates.md');
@@ -349,7 +368,8 @@ async function main() {
       loopState = updateFailureTracking(loopState, normalizeFailureSignature(gateOutput));
       loopState.summary = 'quality gate failed';
       if ((loopState.sameFailureCount || 0) >= (config.pipeline?.loop?.max_same_failure || 2)) {
-        maybeRunOptimizer(config, getTimestamp(), gateOutput);
+        appendLearningRecord('gate-fail', 'repeated gate failure', gateOutput);
+      maybeRunOptimizer(config, getTimestamp(), gateOutput);
         loopState.status = 'failed';
         loopState.stopCondition = 'same-gate-failure';
         saveState(loopState);
@@ -400,7 +420,7 @@ async function main() {
     }
 
     if ((loopState.sameFailureCount || 0) >= (config.pipeline?.loop?.max_same_failure || 2)) {
-      appendInstinctCandidate(reviewOutput);
+      promotePatternOrInstinct(reviewOutput, loopState.sameFailureCount || 0);
       maybeRunOptimizer(config, getTimestamp(), reviewOutput);
       loopState.status = 'failed';
       loopState.stopCondition = 'same-review-failure';
