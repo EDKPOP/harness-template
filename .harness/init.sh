@@ -134,12 +134,19 @@ python3 - <<'PY2' "$STATE_PATH"
 import json, sys
 path=sys.argv[1]
 state=json.load(open(path))
+state["taskId"]=""
+state["status"]="idle"
 state["phase"]=""
 state["activeRole"]=""
+state["activeFeature"]=""
 state["stopCondition"]=""
 state["lastFailureSignature"]=""
 state["sameFailureCount"]=0
 state["iteration"]=0
+state["lastProgressAt"]=""
+state["progressDelta"]=0
+state["summary"]="초기 상태"
+state["lastSuccessfulCheckpoint"]=""
 state["recommendedIntervention"]="continue"
 json.dump(state, open(path, "w"), indent=2)
 PY2

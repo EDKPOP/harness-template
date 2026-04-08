@@ -1,19 +1,19 @@
 {
-  "taskId": "vibecoding-20260408-1809",
-  "status": "failed",
+  "taskId": "",
+  "status": "idle",
   "mode": "",
   "phase": "",
   "activeRole": "",
   "activeFeature": "",
-  "iteration": 3,
+  "iteration": 0,
   "maxIterations": 3,
   "lastGateResult": "PENDING",
   "lastReviewResult": "PENDING",
-  "lastFailureSignature": "2edabf559057",
-  "sameFailureCount": 2,
-  "lastProgressAt": "2026-04-08T09:13:08.509Z",
-  "progressDelta": 12,
-  "stopCondition": "gate-commands-unconfigured",
+  "lastFailureSignature": "",
+  "sameFailureCount": 0,
+  "lastProgressAt": "",
+  "progressDelta": 0,
+  "stopCondition": "",
   "blockers": [],
   "agentSessions": {
     "initializer": "",
@@ -23,7 +23,7 @@
     "reviewer": "",
     "optimizer": ""
   },
-  "summary": "pipeline finished with FAIL",
+  "summary": "초기 상태",
   "lastSuccessfulCheckpoint": "",
-  "recommendedIntervention": ""
+  "recommendedIntervention": "continue"
 }
