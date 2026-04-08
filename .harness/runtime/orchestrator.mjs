@@ -6,7 +6,7 @@ import { parseArgs } from 'util';
 import { execSync } from 'child_process';
 import { loadJson, saveJson, normalizeFailureSignature, updateFailureTracking, markProgress } from './state.mjs';
 import { appendCheckpoint } from './checkpoints.mjs';
-import { recommendIntervention } from './status.mjs';
+import { recommendIntervention, summarizeStatus } from './status.mjs';
 import { loadQualityGates, runQualityGates } from './gates.mjs';
 import { loadAuditSpec, runAudit } from './audit.mjs';
 import { runClaude } from './adapters/claude.mjs';
@@ -418,6 +418,7 @@ async function main() {
   finalState.summary = `pipeline finished with ${effectiveVerdict}`;
   finalState.recommendedIntervention = recommendIntervention(finalState);
   saveState(finalState);
+  writeArtifact('status', getTimestamp(), JSON.stringify(summarizeStatus(finalState), null, 2));
 
   debug(`final verdict=${effectiveVerdict}`);
   debug(`final status=${finalState.status}`);

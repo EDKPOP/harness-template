@@ -41,7 +41,11 @@ export function runAudit({ spec, projectRoot, harnessDir }) {
   const max_score = Object.values(categoryWeights).reduce((a, b) => a + b, 0) || (spec.categories || []).length * 10;
   const overall_score = Object.values(categoryScores).reduce((a, b) => a + b, 0);
   const failed = checks.filter((c) => !c.ok);
-  const top_actions = failed.slice(0, 3).map((c) => `Fix ${c.label} (${c.path})`);
+  const priority = ['quality_gates', 'eval_coverage', 'memory_persistence', 'role_routing_completeness', 'context_routing_discipline'];
+  const top_actions = failed
+    .sort((a, b) => priority.indexOf(a.category) - priority.indexOf(b.category))
+    .slice(0, 3)
+    .map((c) => `Fix ${c.label} (${c.path})`);
 
   return {
     verdict: failed.length ? 'FAIL' : 'PASS',
