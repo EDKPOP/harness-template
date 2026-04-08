@@ -1,4 +1,3 @@
-# Progress Log
-# 각 에이전트 세션이 작업 내역을 여기에 기록합니다.
-# 새 세션은 이 파일과 git log를 읽어 현재 상태를 파악합니다.
-
+[phase:intake] initialized template state
+[phase:audit] pending baseline audit
+[phase:plan] no approved plan yet

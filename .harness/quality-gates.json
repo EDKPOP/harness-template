@@ -1,0 +1,16 @@
+{
+  "required": ["format", "lint", "typecheck", "test"],
+  "optional": ["coverage", "security"],
+  "commands": {
+    "format": "",
+    "lint": "",
+    "typecheck": "",
+    "test": "",
+    "coverage": "",
+    "security": ""
+  },
+  "failure_policy": {
+    "block_on_required_failure": true,
+    "allow_optional_failure_with_warning": true
+  }
+}

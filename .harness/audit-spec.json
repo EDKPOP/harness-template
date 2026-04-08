@@ -1,0 +1,39 @@
+{
+  "categories": [
+    "tool_coverage",
+    "context_efficiency",
+    "quality_gates",
+    "state_observability",
+    "eval_schema",
+    "learning_escalation",
+    "adapter_integrity"
+  ],
+  "checks": {
+    "tool_coverage": [
+      "required agent engines configured",
+      "runtime commands present"
+    ],
+    "quality_gates": [
+      "quality-gates.json exists",
+      "required commands are configured"
+    ],
+    "state_observability": [
+      "session-state.json exists",
+      "artifacts directory exists",
+      "progress tracking enabled"
+    ],
+    "eval_schema": [
+      "feature_list items contain acceptance_checks",
+      "feature_list items contain regression_checks"
+    ],
+    "learning_escalation": [
+      "learnings file exists",
+      "patterns directory exists"
+    ],
+    "adapter_integrity": [
+      "GEMINI.md exists",
+      ".claude/CLAUDE.md exists",
+      ".claude/agents exists"
+    ]
+  }
+}

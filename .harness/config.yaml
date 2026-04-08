@@ -1,29 +1,40 @@
-# Harness Pipeline Configuration v2.0
-# Initializer Agent가 프로젝트 설정 시 이 파일을 채웁니다.
-# 직접 편집해도 됩니다.
+# Harness Pipeline Configuration v3.0
+# Initializer Agent가 프로젝트 설정 시 이 파일을 채운다.
+# 직접 편집도 가능하지만, 하네스 상태와 어긋나지 않게 유지해야 한다.
 
-# 하네스 메타데이터
 harness:
-  version: "2.0"        # vibecoding 스킬 버전
-  created_at: ""         # 생성일 (Initializer가 채움)
-  last_migrated: null    # 마이그레이션 일시
+  version: "3.0"
+  created_at: ""
+  last_migrated: null
+  template_version: "v3"
+  adapter_mode: "native-preferred"
 
 project:
-  name: ""               # 프로젝트명
-  description: ""        # 프로젝트 설명
+  name: ""
+  description: ""
 
-# 기술 스택
 stack:
-  language: ""           # typescript | python | go | rust | java
-  runtime: ""            # node 20+ | python 3.12+ | go 1.22+
-  framework: ""          # next.js | fastapi | gin | 없음
-  test: ""               # vitest | pytest | go test
-  package_manager: ""    # pnpm | npm | pip | cargo
+  language: ""
+  runtime: ""
+  framework: ""
+  test: ""
+  package_manager: ""
 
-# 에이전트 설정
 agents:
+  initializer:
+    engine: claude
+    role_file: ".harness/roles/initializer.md"
+
+  explorer:
+    engine: gemini
+    role_file: ".harness/roles/code-explorer.md"
+
+  architect:
+    engine: gemini
+    role_file: ".harness/roles/code-architect.md"
+
   planner:
-    engine: gemini       # gemini | claude | codex
+    engine: gemini
     role_file: ".harness/roles/planner.md"
 
   implementer:
@@ -34,29 +45,54 @@ agents:
     engine: codex
     role_file: ".harness/roles/reviewer.md"
 
-# 파이프라인 설정
+  silent_failure_hunter:
+    engine: codex
+    role_file: ".harness/roles/silent-failure-hunter.md"
+
+  pr_test_analyzer:
+    engine: codex
+    role_file: ".harness/roles/pr-test-analyzer.md"
+
+  harness_optimizer:
+    engine: claude
+    role_file: ".harness/roles/harness-optimizer.md"
+
 pipeline:
   phases:
+    - intake
+    - audit
+    - discover
     - plan
     - implement
+    - gate
     - review
+    - optimize
 
-  scale: project         # hotfix | feature | project
+  scale: project
 
   loop:
     max_iterations: 3
+    max_same_failure: 2
+    no_progress_timeout_minutes: 15
     pass_on:
       - "PASS"
       - "WARNING_ONLY"
-    fail_action: "notify" # notify | stop
+    fail_action: "notify"
 
-# 산출물 관리
 artifacts:
   directory: ".harness/artifacts"
   keep_history: true
 
-# 학습 축적
-learnings:
-  file: ".harness/learnings.md"
+quality:
+  gate_file: ".harness/quality-gates.json"
+  require_all_mandatory: true
+
+audit:
+  spec_file: ".harness/audit-spec.json"
+  required_before_run: true
+
+learning:
+  learnings_file: ".harness/learnings.md"
+  patterns_dir: ".harness/patterns"
   auto_extract: true
-  inject_to_implement: true
+  escalate_after_repeats: 2

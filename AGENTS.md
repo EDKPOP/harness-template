@@ -1,46 +1,36 @@
 # AGENTS.md
 
-## 역할
+## Project Model
 
-| 에이전트 | 역할 | 엔진 설정 |
-|----------|------|-----------|
-| Planner | 요구사항 분석, 구현 계획 | `.harness/config.yaml` |
-| Implementer | 코드 작성, 테스트 | `.harness/config.yaml` |
-| Reviewer | 품질 검증, 테스트 실행 | `.harness/config.yaml` |
+- 이 저장소는 프로젝트 내부 하네스인 `.harness/`를 중심으로 작동한다.
+- 상세 역할 규칙, runtime 제어, gate 정의, 상태 모델은 `.harness/`에 있다.
+- OpenClaw는 관제자이며, 실제 실행은 프로젝트 내부 역할 에이전트가 맡는다.
 
-## 규칙
+## Working Rules
 
-- 기술 스택: `.harness/config.yaml`의 `stack` 참조
-- 커밋: Conventional Commits (feat:, fix:, docs:, refactor:, test:)
-- 시크릿 직접 기입 금지 (환경변수 사용)
-- 다른 에이전트의 역할 침범 금지
+- 기존 코드 패턴과 프로젝트 제약을 먼저 찾고 그 다음 변경한다.
+- 승인된 계획 범위를 넘겨 구현하지 않는다.
+- quality gate를 통과하기 전에는 완료로 취급하지 않는다.
+- 반복 실패는 learnings와 patterns로 승격해 다음 반복에서 줄인다.
 
-## 작업 방식
+## Verification
 
-- `feature_list.json`에서 미완료 기능을 하나씩 구현
-- 구현 후 반드시 테스트 실행 (코드 재읽기는 검증이 아님)
-- 기능 완료 시 `passes: true`로 변경 + git commit + progress.txt 기록
-- `feature_list.json`의 description/steps/id 수정 금지, passes만 변경
+- 필수 gate는 `.harness/quality-gates.json`에 정의한다.
+- 상태 진실은 `.harness/session-state.json`과 `.harness/artifacts/`에 기록한다.
+- feature 단위 진행 상태는 `.harness/feature_list.json`을 따른다.
 
-## 수정 금지 파일 (IMMUTABLE)
+## Immutable Surfaces
 
-- `AGENTS.md`, `.claude/CLAUDE.md`
-- `.harness/config.yaml`, `.harness/roles/*.md`
+- `AGENTS.md`
+- `GEMINI.md`
+- `.claude/CLAUDE.md`
+- `.harness/config.yaml`
 - `.harness/runtime/*`
 
-## 파이프라인
+## References
 
-```
-feature_list.json (passes: false 항목)
-  → [Plan] → artifacts/plan-*.md
-  → [Implement] → 코드 + artifacts/impl-*.md ← learnings.md
-  → [Review] → artifacts/review-*.md
-  → PASS? → learnings.md 갱신 → 커밋
-  → FAIL? → Phase 2 복귀 (최대 N회)
-```
-
-## 상세 문서
-
-- 아키텍처: `docs/` (프로젝트별 작성)
-- 하네스 설정: `.harness/config.yaml`
-- 역할 지시서: `.harness/roles/*.md`
+- 역할 지시서: `.harness/roles/`
+- runtime: `.harness/runtime/`
+- 산출물: `.harness/artifacts/`
+- adapter surfaces: `GEMINI.md`, `.claude/CLAUDE.md`, `.claude/agents/`
+- 추가 문서: `docs/`

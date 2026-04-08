@@ -1,11 +1,27 @@
 {
-  "taskId": null,
-  "status": "idle",
-  "phase": null,
-  "mode": null,
-  "iteration": 0,
+  "taskId": "vibecoding-20260408-1809",
+  "status": "failed",
+  "mode": "",
+  "phase": "",
+  "activeRole": "",
+  "activeFeature": "",
+  "iteration": 3,
   "maxIterations": 3,
-  "summary": "초기 상태",
-  "startedAt": null,
-  "lastUpdate": null
+  "lastGateResult": "PENDING",
+  "lastReviewResult": "PENDING",
+  "lastFailureSignature": "2edabf559057",
+  "sameFailureCount": 2,
+  "lastProgressAt": "2026-04-08T09:13:08.509Z",
+  "progressDelta": 12,
+  "stopCondition": "gate-commands-unconfigured",
+  "blockers": [],
+  "agentSessions": {
+    "initializer": "",
+    "explorer": "",
+    "planner": "",
+    "implementer": "",
+    "reviewer": "",
+    "optimizer": ""
+  },
+  "summary": "pipeline finished with FAIL"
 }

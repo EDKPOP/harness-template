@@ -1,19 +1,44 @@
-# harness-template v2.0
+# harness-template v3.0
 
-멀티 에이전트 바이브 코딩 하네스 템플릿.
+ECC 교훈이 반영된 멀티 에이전트 하네스 운영 템플릿.
 
-## 개요
+## Core Model
 
-AI 코딩 에이전트들에게 역할을 분리하여 체계적으로 코드를 생성·검증하는 파이프라인 템플릿.
+- OpenClaw는 관제자이자 환경 세터다.
+- 실제 실행은 프로젝트 내부 하네스와 역할 에이전트가 맡는다.
+- 이 템플릿은 새 프로젝트 시작, 기존 프로젝트 도입, 재진입, 마이그레이션의 공통 기반이다.
 
-- **Initializer** → 환경 설정, feature list 생성, 프로젝트 부팅
-- **Planner** → 요구사항 분석, 구현 계획 수립
-- **Implementer** → 한 번에 하나의 기능씩 점진적 구현
-- **Reviewer** → 품질 검증, 테스트 실행
+## Included Capabilities
 
-## 시작하기
+- Bootstrap / Resume / Adopt / Migrate
+- Discovery / Planning / Implementation / Quality Gate / Review / Optimize
+- Expanded role system
+- Feature-level eval schema
+- Loop control and stop-loss
+- Native adapter surfaces for Claude, Codex, and Gemini
 
-### 새 프로젝트 (Mode A: Bootstrap)
+## Role System
+
+### Core roles
+
+- Initializer
+- Planner
+- Implementer
+- Reviewer
+
+### Conditional roles
+
+- Code Explorer
+- Code Architect
+- Silent Failure Hunter
+- PR Test Analyzer
+- Harness Optimizer
+- Loop Operator
+- Council
+
+## Getting Started
+
+### New project (Bootstrap)
 
 ```bash
 git clone https://github.com/EDKPOP/harness-template.git my-project
@@ -21,109 +46,152 @@ cd my-project
 rm -rf .git && git init
 ```
 
-OpenClaw에서 "바이브코딩" 또는 "harness" 언급하면 자동으로 진행.
+그 다음 OpenClaw에서 vibecoding을 사용해 환경 세팅과 하네스 초기화를 진행한다.
 
-### 기존 프로젝트에 도입 (Mode C: Adopt)
+### Adopt into an existing project
 
-OpenClaw에 "이 프로젝트에 하네스 도입해줘"라고 요청.
-`.harness/` 디렉터리만 추출하여 기존 프로젝트에 병합됨.
+기존 프로젝트 루트에 `.harness/`가 없다면, OpenClaw가 이 템플릿의 하네스 구조를 주입하고 Initializer가 프로젝트에 맞게 채운다.
 
-### 기존 하네스 프로젝트 재진입 (Mode B: Resume)
+### Resume an existing harness project
 
-OpenClaw에 수정/추가 요청하면 자동으로 기존 하네스를 인식하고 이어감.
+`.harness/config.yaml`, `feature_list.json`, `session-state.json`, 최근 artifacts를 기반으로 현재 상태를 읽고 이어서 진행한다.
 
-### 레거시 하네스 업그레이드 (Mode D: Migrate)
+### Migrate a legacy harness
 
-이전 버전 하네스가 감지되면 자동으로 v2.0으로 비파괴적 마이그레이션.
+이전 하네스 구조가 감지되면 비파괴적으로 v3 구조로 확장한다. 기존 산출물과 학습 로그는 보존한다.
 
-## 폴더 구조
+## Directory Structure
 
-```
+```text
 project/
-├── AGENTS.md                  ← 공통 규칙 맵 (60줄 이하)
+├── AGENTS.md
+├── GEMINI.md
 ├── .claude/
-│   └── CLAUDE.md              ← Claude Code 전용 지시서
+│   ├── CLAUDE.md
+│   └── agents/
+│       ├── planner.md
+│       ├── implementer.md
+│       ├── reviewer.md
+│       ├── code-explorer.md
+│       ├── silent-failure-hunter.md
+│       ├── pr-test-analyzer.md
+│       └── harness-optimizer.md
 ├── .harness/
-│   ├── config.yaml            ← 하네스 설정 (v2.0)
-│   ├── feature_list.json      ← 기능별 진행 추적
-│   ├── progress.txt           ← 세션별 작업 내역 로그
-│   ├── init.sh                ← 환경 부팅 스크립트
-│   ├── session-state.json     ← 파이프라인 상태
-│   ├── learnings.md           ← 누적 학습 기록
+│   ├── config.yaml
+│   ├── feature_list.json
+│   ├── session-state.json
+│   ├── progress.txt
+│   ├── learnings.md
+│   ├── quality-gates.json
+│   ├── audit-spec.json
+│   ├── patterns/
 │   ├── roles/
-│   │   ├── planner.md         ← Planner 지시서
-│   │   ├── implementer.md     ← Implementer 지시서
-│   │   └── reviewer.md        ← Reviewer 지시서
 │   ├── runtime/
-│   │   └── orchestrator.mjs   ← Node.js 오케스트레이터
-│   ├── artifacts/             ← 산출물 (자동 생성)
-│   └── legacy/                ← 마이그레이션 시 이전 파일 보관
-├── docs/                      ← 상세 문서 (AGENTS.md에서 포인터)
-└── src/                       ← 프로젝트 소스코드
+│   ├── artifacts/
+│   └── legacy/
+├── docs/
+└── src/
 ```
 
-## 핵심 파일
+## State Surfaces
 
-### feature_list.json
+OpenClaw와 loop operator는 아래를 우선적인 진실로 본다.
 
-기능별 진행 추적의 핵심. 각 기능이 JSON 객체로 관리됨.
+- `.harness/session-state.json`
+- `.harness/feature_list.json`
+- `.harness/artifacts/*`
+- `.harness/progress.txt`
+- `.harness/learnings.md`
+- `.harness/patterns/*`
 
-```json
-{
-  "id": "feat-001",
-  "category": "functional",
-  "description": "사용자가 로그인할 수 있다",
-  "steps": ["로그인 페이지 이동", "이메일/비밀번호 입력", "로그인 확인"],
-  "passes": false,
-  "priority": 1
-}
+## Feature Schema
+
+각 feature는 단순한 `passes` 외에도 아래를 가진다.
+
+- `acceptance_checks`
+- `regression_checks`
+- `grader_type`
+- `evidence`
+- `status_reason`
+- `risk_level`
+- `gate_status`
+- `review_status`
+
+이 구조 덕분에 Planner, Gate, Reviewer, Optimizer가 같은 진실을 공유할 수 있다.
+
+## Phase Model
+
+```text
+[Intake]
+  -> [Audit]
+  -> [Discover]
+  -> [Plan]
+  -> [Implement]
+  -> [Gate]
+  -> [Review]
+  -> [Optimize]
+  -> [Complete | Retry | Stop]
 ```
 
-- 에이전트는 `passes` 필드만 변경 가능
-- description, steps, id 삭제/수정 금지
+## Quality Gates
 
-### progress.txt
+Gate는 reviewer와 분리된 first-class 계층이다.
 
-에이전트가 매 세션 종료 시 작업 내역을 기록. 다음 세션이 이 파일을 읽고 이어감.
+기본적으로 아래 항목을 지원한다.
 
-### init.sh
+- format
+- lint
+- typecheck
+- test
+- coverage
+- security quick checks
 
-개발 환경 부팅 스크립트. Initializer Agent가 프로젝트에 맞게 작성.
+필수와 선택 항목은 `.harness/quality-gates.json`에서 정의한다.
 
-## 파이프라인 흐름
+## Learning Escalation
 
+- `learnings.md`는 프로젝트 수준의 누적 로그다.
+- `patterns/`는 반복되는 실패/교훈을 개별 패턴으로 승격한 공간이다.
+- 반복되는 문제는 Harness Optimizer가 더 강한 규칙, gate, 또는 prompt 개선 후보로 승격한다.
+
+## Native Adapter Surfaces
+
+- Codex: `AGENTS.md`
+- Gemini: `GEMINI.md`
+- Claude: `.claude/CLAUDE.md`, `.claude/agents/*`
+
+canonical role spec은 항상 `.harness/roles/*.md`에 둔다. adapter는 엔진 친화적 진입점일 뿐이다.
+
+## Runtime
+
+템플릿은 프로젝트 내부 실행용 runtime을 제공한다.
+
+```bash
+node .harness/runtime/orchestrator.mjs
 ```
-feature_list.json (passes: false)
-    ↓
-[Plan] → 구현 순서 + 의존관계 정리
-    ↓
-[Implement] → 기능 하나씩 구현 + 테스트 + commit
-    ↓
-[Review] → 테스트 실행 + 품질 검증
-    ↓
-  PASS? ──yes──→ learnings.md 갱신 → 완료
-    │
-   no (최대 N회)
-    │
-    └──→ 피드백 반영 → [Implement] → [Review] → ...
-```
 
-## 커스터마이징
+장기적으로는 audit, gate, state, adapters 계층으로 분리된 runtime을 사용한다.
 
-- **에이전트 엔진 변경**: `config.yaml`의 `agents` 섹션
-- **역할 규칙 조정**: `.harness/roles/*.md`
-- **반복 횟수**: `config.yaml`의 `pipeline.loop.max_iterations`
-- **태스크 규모**: `config.yaml`의 `pipeline.scale` (hotfix / feature / project)
+## Migration from v2
 
-## 사전 요구사항
+v2에서 v3로 올릴 때는 아래를 보존한다.
 
-- Node.js 20+ (orchestrator.mjs 실행용)
+- 기존 artifacts
+- 기존 learnings
+- 기존 feature history
+- 기존 progress 로그
+
+새로운 schema, adapter, role, gate, runtime surface만 비파괴적으로 추가한다.
+
+## Requirements
+
+- Node.js 20+
 - Git
-- AI 코딩 에이전트 CLI (하나 이상):
-  - [Gemini CLI](https://github.com/google-gemini/gemini-cli)
-  - [Claude Code](https://docs.anthropic.com/en/docs/claude-code): `npm i -g @anthropic-ai/claude-code`
-  - [Codex CLI](https://github.com/openai/codex): `npm i -g @openai/codex`
+- 하나 이상의 코딩 에이전트 CLI
+  - Gemini CLI
+  - Claude Code
+  - Codex CLI
 
-## 라이선스
+## License
 
 MIT

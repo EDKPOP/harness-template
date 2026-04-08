@@ -2,12 +2,26 @@
   {
     "id": "feat-001",
     "category": "example",
-    "description": "예시 기능 — Initializer Agent가 이 파일을 프로젝트 요구사항에 맞게 교체합니다",
+    "description": "예시 기능 — Initializer Agent가 실제 요구사항에 맞게 이 목록을 교체한다",
     "steps": [
-      "이 파일은 템플릿 예시입니다",
-      "Initializer Agent가 app_spec을 분석하여 실제 기능 목록을 생성합니다"
+      "이 feature는 템플릿 예시다",
+      "Initializer 또는 Planner가 실제 기능 목록과 검증 기준으로 교체한다"
     ],
+    "acceptance_checks": [
+      "실제 프로젝트 요구사항에 맞는 성공 조건을 정의한다"
+    ],
+    "regression_checks": [
+      "기존 기능이 깨지지 않는지 확인하는 항목을 정의한다"
+    ],
+    "grader_type": "hybrid",
+    "evidence": [],
     "passes": false,
-    "priority": 1
+    "status_reason": "",
+    "priority": 1,
+    "risk_level": "medium",
+    "related_files": [],
+    "owner_role": "implementer",
+    "gate_status": "pending",
+    "review_status": "pending"
   }
 ]

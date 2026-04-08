@@ -1,19 +1,5 @@
-# Harness Learnings
+# Learnings
 
-이 파일은 파이프라인 반복 과정에서 축적된 학습 사항을 기록한다.
-각 에이전트는 이 파일을 읽고 동일한 실수를 반복하지 않아야 한다.
-OpenClaw 오케스트레이터가 리뷰 결과에서 패턴을 추출하여 자동 갱신한다.
-
-## 형식
-
-```markdown
-### [날짜] [프로젝트/태스크명]
-- **문제**: 무엇이 잘못됐는지
-- **원인**: 왜 발생했는지
-- **해결**: 어떻게 고쳤는지
-- **규칙**: 앞으로 적용할 규칙
-```
-
----
-
-<!-- 학습 항목이 아래에 자동 추가됩니다 -->
+## 2026-04-08
+- [warning][pattern-candidate] Example warning to escalate if repeated.
+- [fail] Example failure summary with root cause and suggested harness fix.
