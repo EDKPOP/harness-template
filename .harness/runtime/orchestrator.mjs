@@ -7,7 +7,7 @@ import { execSync } from 'child_process';
 import { loadJson, saveJson, normalizeFailureSignature, updateFailureTracking, markProgress } from './state.mjs';
 import { appendCheckpoint } from './checkpoints.mjs';
 import { recommendIntervention, summarizeStatus } from './status.mjs';
-import { appendNotification, writeLatestNotification, buildPhaseEvent } from './notifications.mjs';
+import { appendNotification, writeLatestNotification, buildPhaseEvent, buildNotifierCommand } from './notifications.mjs';
 import { loadQualityGates, runQualityGates } from './gates.mjs';
 import { loadAuditSpec, runAudit } from './audit.mjs';
 import { runClaude } from './adapters/claude.mjs';
@@ -299,6 +299,7 @@ async function main() {
   const auditEvent = buildPhaseEvent('audit', auditResult.verdict === 'PASS' ? 'completed' : 'failed', auditResult.verdict === 'PASS' ? 'Audit passed' : `Audit failed: ${(auditResult.top_actions || []).join('; ')}`, { topActions: auditResult.top_actions || [] });
   appendNotification(HARNESS_DIR, auditEvent);
   writeLatestNotification(HARNESS_DIR, auditEvent);
+  try { execSync(buildNotifierCommand(HARNESS_DIR, auditEvent.phase, auditEvent.status, auditEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
   debug(`audit verdict=${auditResult.verdict}`);
   if (auditResult.verdict !== 'PASS') {
     state.status = 'failed';
@@ -326,6 +327,7 @@ async function main() {
   const planEvent = buildPhaseEvent('plan', 'completed', 'Planning completed', { verdict: extractVerdict(plan) });
   appendNotification(HARNESS_DIR, planEvent);
   writeLatestNotification(HARNESS_DIR, planEvent);
+  try { execSync(buildNotifierCommand(HARNESS_DIR, planEvent.phase, planEvent.status, planEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
   debug(`plan verdict=${extractVerdict(plan)}`);
   nextState = loadState();
   nextState = markProgress({ ...nextState, phase: 'implement', activeRole: 'implementer' }, 'plan complete');
@@ -350,6 +352,7 @@ async function main() {
     const implEvent = buildPhaseEvent('implement', 'completed', 'Implementation step finished', { iteration: loopState.iteration, verdict: extractVerdict(implOutput) });
     appendNotification(HARNESS_DIR, implEvent);
     writeLatestNotification(HARNESS_DIR, implEvent);
+    try { execSync(buildNotifierCommand(HARNESS_DIR, implEvent.phase, implEvent.status, implEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
     debug(`impl verdict=${extractVerdict(implOutput)}`);
 
     loopState = loadState();
@@ -366,6 +369,7 @@ async function main() {
     const gateEvent = buildPhaseEvent('gate', gateResult.verdict === 'FAIL' ? 'failed' : gateResult.verdict === 'PENDING' ? 'paused' : 'completed', `Gate ${gateResult.verdict}`, { verdict: gateResult.verdict });
     appendNotification(HARNESS_DIR, gateEvent);
     writeLatestNotification(HARNESS_DIR, gateEvent);
+    try { execSync(buildNotifierCommand(HARNESS_DIR, gateEvent.phase, gateEvent.status, gateEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
 
     loopState.lastGateResult = gateResult.verdict;
     if (gateResult.verdict === 'PENDING') {
@@ -401,6 +405,7 @@ async function main() {
     const reviewEvent = buildPhaseEvent('review', 'completed', 'Review finished', { verdict: extractVerdict(reviewOutput) });
     appendNotification(HARNESS_DIR, reviewEvent);
     writeLatestNotification(HARNESS_DIR, reviewEvent);
+    try { execSync(buildNotifierCommand(HARNESS_DIR, reviewEvent.phase, reviewEvent.status, reviewEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
     debug(`review raw=${JSON.stringify(reviewOutput)}`);
     verdict = extractVerdict(reviewOutput);
     loopState.lastReviewResult = verdict;
@@ -459,6 +464,7 @@ async function main() {
   const finalEvent = buildPhaseEvent('final', finalState.status, finalState.summary, finalStatus);
   appendNotification(HARNESS_DIR, finalEvent);
   writeLatestNotification(HARNESS_DIR, finalEvent);
+  try { execSync(buildNotifierCommand(HARNESS_DIR, finalEvent.phase, finalEvent.status, finalEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
 
   debug(`final verdict=${effectiveVerdict}`);
   debug(`final status=${finalState.status}`);

@@ -3,7 +3,7 @@
 import { resolve, join } from 'path';
 import { existsSync, readFileSync, writeFileSync, symlinkSync, unlinkSync } from 'fs';
 import { parseArgs } from 'util';
-import { buildPhaseEvent, appendNotification, writeLatestNotification } from './notifications.mjs';
+import { buildPhaseEvent, appendNotification, writeLatestNotification, buildNotifierCommand } from './notifications.mjs';
 import { recommendIntervention, summarizeStatus } from './status.mjs';
 import { appendCheckpoint } from './checkpoints.mjs';
 import { runClaude } from './adapters/claude.mjs';
@@ -104,5 +104,6 @@ appendCheckpoint(HARNESS_DIR, { timestamp: new Date().toISOString(), phase, acti
 const event = buildPhaseEvent(phase, 'completed', `${phase} completed via role-runner`, { artifact, engine, role: roleFile });
 appendNotification(HARNESS_DIR, event);
 writeLatestNotification(HARNESS_DIR, event);
+try { execSync(buildNotifierCommand(HARNESS_DIR, event.phase, event.status, event.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
 writeArtifact('status', JSON.stringify(summarizeStatus(state), null, 2));
 console.log(JSON.stringify({ ok: true, phase, artifact, engine, role: roleFile }, null, 2));

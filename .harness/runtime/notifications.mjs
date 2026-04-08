@@ -21,3 +21,9 @@ export function buildPhaseEvent(phase, status, summary, extra = {}) {
     ...extra,
   };
 }
+
+
+export function buildNotifierCommand(harnessDir, phase, status, summary) {
+  const payloadPath = `${harnessDir}/notification-latest.json`;
+  return `node ${harnessDir}/runtime/notify-openclaw.mjs --phase ${JSON.stringify(phase)} --status ${JSON.stringify(status)} --summary ${JSON.stringify(summary)} --payload ${JSON.stringify(payloadPath)}`;
+}

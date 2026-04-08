@@ -3,7 +3,7 @@
 import { resolve, join } from 'path';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { parseArgs } from 'util';
-import { buildPhaseEvent, appendNotification, writeLatestNotification } from './notifications.mjs';
+import { buildPhaseEvent, appendNotification, writeLatestNotification, buildNotifierCommand } from './notifications.mjs';
 import { recommendIntervention } from './status.mjs';
 
 const PROJECT_ROOT = resolve(process.cwd());
@@ -58,4 +58,5 @@ saveState(state);
 const event = buildPhaseEvent(phase, 'completed', `${phase} completed via phase-runner`, { artifact: target });
 appendNotification(HARNESS_DIR, event);
 writeLatestNotification(HARNESS_DIR, event);
+try { require('child_process').execSync(buildNotifierCommand(HARNESS_DIR, event.phase, event.status, event.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
 console.log(JSON.stringify({ ok: true, phase, artifact: target, state }, null, 2));
