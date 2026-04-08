@@ -203,7 +203,7 @@ function maybeRunAnalyzer(config, timestamp, kind, reviewOutput, gateOutput) {
   };
   const target = mapping[kind];
   if (!target?.role_file || !target?.engine) return null;
-  const prompt = buildPrompt(target.role_file.split('/').pop(), { review: reviewOutput, gate: gateOutput, plan: readFile(join(ARTIFACTS_DIR, 'plan-latest.md')) });
+  const prompt = buildPrompt(target.role_file.split('/').pop(), { review: reviewOutput, gate: gateOutput, plan: readFile(join(ARTIFACTS_DIR, 'plan-latest.md')), learnings: readFile(join(HARNESS_DIR, 'learnings.md')) });
   const output = runAgent(target.engine, prompt);
   writeArtifact(kind === 'silent' ? 'silent-failure' : 'test-analysis', timestamp, output);
   return output;
@@ -242,7 +242,9 @@ async function main() {
   success('Audit passed');
   saveState(markProgress({ ...state, phase: 'discover', activeRole: 'code-explorer' }, 'audit complete'));
 
-  const discovery = runDiscovery(config, timestamp);
+  const mode = loadState().mode || config.project?.mode || '';
+  const mustDiscover = mode === 'C' || mode === 'Adopt' || Boolean(config.pipeline?.role_routing?.adopt_requires);
+  const discovery = mustDiscover ? runDiscovery(config, timestamp) : '';
   let nextState = loadState();
   nextState = markProgress({ ...nextState, phase: 'plan', activeRole: 'planner' }, 'discovery complete');
   saveState(nextState);

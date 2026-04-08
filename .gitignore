@@ -24,3 +24,4 @@ Thumbs.db
 
 # Harness artifacts (산출물은 git에 포함 — 히스토리 보존)
 # .harness/artifacts/ 는 커밋한다
+.DS_Store
