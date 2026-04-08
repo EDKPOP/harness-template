@@ -167,7 +167,8 @@ function runDiscovery(config, timestamp) {
   const engine = config.agents?.explorer?.engine || 'claude';
   const prompt = buildPrompt(roleFile.split('/').pop());
   const roleName = roleFile.split('/').pop();
-  const output = withFallback(engine, 'claude', (selected) => runAgent(selected, prompt, roleName), (_error, fb) => sendHeartbeat('discover', `fallback to ${fb}`));
+  const forceDryRun = Boolean(config.agents?.explorer?.force_dry_run);
+  const output = forceDryRun ? dryRunOutput(roleName) : withFallback(engine, 'claude', (selected) => runAgent(selected, prompt, roleName), (_error, fb) => sendHeartbeat('discover', `fallback to ${fb}`));
   writeArtifact('discover', timestamp, output);
   return output;
 }
@@ -177,7 +178,8 @@ function runPlanning(config, timestamp, discovery) {
   const engine = config.agents?.planner?.engine || 'claude';
   const prompt = buildPrompt(roleFile.split('/').pop(), { discovery });
   const roleName = roleFile.split('/').pop();
-  const output = withFallback(engine, 'claude', (selected) => runAgent(selected, prompt, roleName), (_error, fb) => sendHeartbeat('plan', `fallback to ${fb}`));
+  const forceDryRun = Boolean(config.agents?.planner?.force_dry_run);
+  const output = forceDryRun ? dryRunOutput(roleName) : withFallback(engine, 'claude', (selected) => runAgent(selected, prompt, roleName), (_error, fb) => sendHeartbeat('plan', `fallback to ${fb}`));
   writeArtifact('plan', timestamp, output);
   return output;
 }
