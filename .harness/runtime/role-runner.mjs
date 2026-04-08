@@ -3,6 +3,7 @@
 import { resolve, join } from 'path';
 import { existsSync, readFileSync, writeFileSync, symlinkSync, unlinkSync } from 'fs';
 import { parseArgs } from 'util';
+import { execSync } from 'child_process';
 import { buildPhaseEvent, appendNotification, writeLatestNotification, buildNotifierCommand } from './notifications.mjs';
 import { recommendIntervention, summarizeStatus } from './status.mjs';
 import { appendCheckpoint } from './checkpoints.mjs';
@@ -79,9 +80,23 @@ function buildPrompt(roleFile) {
   return parts.join('\n');
 }
 
+function runWithClaudeRole(roleFile, prompt) {
+  const roleName = roleFile.replace('.md', '');
+  const agentPath = join(PROJECT_ROOT, '.claude', 'agents', `${roleName}.md`);
+  if (!existsSync(agentPath)) return runClaude(prompt, { cwd: PROJECT_ROOT, dryRun: false });
+  const command = `claude --permission-mode bypassPermissions --print --agent ${JSON.stringify(roleName)} ${JSON.stringify(prompt)}`;
+  return execSync(command, {
+    cwd: PROJECT_ROOT,
+    encoding: 'utf-8',
+    timeout: 600000,
+    maxBuffer: 10 * 1024 * 1024,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+}
+
 function run(engine, prompt) {
   if (DRY_RUN) return `# Dry Run\n\n## Machine Signals\nverdict: WARNING_ONLY\nescalate: none\nreason: dry-run-role-runner\n`;
-  if (engine === 'claude') return runClaude(prompt, { cwd: PROJECT_ROOT, dryRun: false });
+  if (engine === 'claude') return runWithClaudeRole(roleFile, prompt);
   if (engine === 'codex') return runCodex(prompt, { cwd: PROJECT_ROOT, dryRun: false });
   if (engine === 'gemini') return runGemini(prompt, { cwd: PROJECT_ROOT, dryRun: false });
   throw new Error(`Unknown engine: ${engine}`);
