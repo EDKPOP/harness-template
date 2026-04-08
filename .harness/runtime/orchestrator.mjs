@@ -293,6 +293,10 @@ async function main() {
   state.phase = 'audit';
   state.maxIterations = config.pipeline?.loop?.max_iterations || 3;
   saveState(state);
+  const startEvent = buildPhaseEvent('intake', 'completed', 'project initialized, moving to audit');
+  appendNotification(HARNESS_DIR, startEvent);
+  writeLatestNotification(HARNESS_DIR, startEvent);
+  try { execSync(buildNotifierCommand(HARNESS_DIR, startEvent.phase, startEvent.status, startEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
 
   const auditSpec = loadAuditSpec(join(HARNESS_DIR, 'audit-spec.json'));
   const auditResult = runAudit({ spec: auditSpec, projectRoot: PROJECT_ROOT, harnessDir: HARNESS_DIR });
@@ -317,12 +321,25 @@ async function main() {
   saveState(audited);
   appendCheckpoint(HARNESS_DIR, { timestamp: new Date().toISOString(), phase: 'audit', activeFeature: '', summary: 'audit complete', verdict: 'PASS' });
 
+  const discoverStartEvent = buildPhaseEvent('discover', 'started', 'starting discovery');
+  appendNotification(HARNESS_DIR, discoverStartEvent);
+  writeLatestNotification(HARNESS_DIR, discoverStartEvent);
+  try { execSync(buildNotifierCommand(HARNESS_DIR, discoverStartEvent.phase, discoverStartEvent.status, discoverStartEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+
   const mode = loadState().mode || config.project?.mode || '';
   const mustDiscover = mode === 'C' || mode === 'Adopt' || Boolean(config.pipeline?.role_routing?.adopt_requires);
   const discovery = mustDiscover ? runDiscovery(config, timestamp) : '';
+  const discoverEvent = buildPhaseEvent('discover', 'completed', 'discovery completed');
+  appendNotification(HARNESS_DIR, discoverEvent);
+  writeLatestNotification(HARNESS_DIR, discoverEvent);
+  try { execSync(buildNotifierCommand(HARNESS_DIR, discoverEvent.phase, discoverEvent.status, discoverEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
   let nextState = loadState();
   nextState = markProgress({ ...nextState, phase: 'plan', activeRole: 'planner' }, 'discovery complete');
   saveState(nextState);
+  const planStartEvent = buildPhaseEvent('plan', 'started', 'starting planning');
+  appendNotification(HARNESS_DIR, planStartEvent);
+  writeLatestNotification(HARNESS_DIR, planStartEvent);
+  try { execSync(buildNotifierCommand(HARNESS_DIR, planStartEvent.phase, planStartEvent.status, planStartEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
 
   const plan = runPlanning(config, timestamp, discovery);
   const planEvent = buildPhaseEvent('plan', 'completed', 'Planning completed', { verdict: extractVerdict(plan), approvalGate: '' });

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync, existsSync } from 'fs';
+import { spawnSync } from 'child_process';
 import { parseArgs } from 'util';
 
 const { values } = parseArgs({
@@ -20,7 +21,8 @@ const payloadPath = values.payload || '';
 
 const targetChatId = process.env.OPENCLAW_NOTIFY_CHAT_ID || '';
 const targetChannel = process.env.OPENCLAW_NOTIFY_CHANNEL || '';
-const targetSurface = process.env.OPENCLAW_NOTIFY_SURFACE || '';
+const targetSurface = process.env.OPENCLAW_NOTIFY_SURFACE || targetChannel || '';
+const sendEnabled = (process.env.OPENCLAW_NOTIFY_SEND || '1') !== '0';
 
 let payload = {};
 if (payloadPath && existsSync(payloadPath)) {
@@ -38,12 +40,25 @@ const envelope = {
   status,
   summary,
   message,
-  target: {
-    chatId: targetChatId,
-    channel: targetChannel,
-    surface: targetSurface,
-  },
+  target: { chatId: targetChatId, channel: targetChannel, surface: targetSurface },
   payload,
 };
 
-process.stdout.write(JSON.stringify(envelope));
+if (!targetChatId || !targetSurface || !sendEnabled) {
+  process.stdout.write(JSON.stringify(envelope));
+  process.exit(0);
+}
+
+const result = spawnSync('openclaw', [
+  'message', 'send',
+  '--channel', targetSurface,
+  '--target', targetChatId,
+  '--message', message,
+], { encoding: 'utf-8' });
+
+if (result.status !== 0) {
+  process.stderr.write(result.stderr || result.stdout || 'notify-openclaw failed');
+  process.exit(result.status || 1);
+}
+
+process.stdout.write(JSON.stringify({ ...envelope, delivered: true, transport: 'openclaw message send' }));
