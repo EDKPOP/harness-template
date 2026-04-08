@@ -23,5 +23,7 @@
     "reviewer": "",
     "optimizer": ""
   },
-  "summary": "pipeline finished with FAIL"
+  "summary": "pipeline finished with FAIL",
+  "lastSuccessfulCheckpoint": "",
+  "recommendedIntervention": ""
 }

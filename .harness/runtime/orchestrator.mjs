@@ -5,6 +5,8 @@ import { join, resolve } from 'path';
 import { parseArgs } from 'util';
 import { execSync } from 'child_process';
 import { loadJson, saveJson, normalizeFailureSignature, updateFailureTracking, markProgress } from './state.mjs';
+import { appendCheckpoint } from './checkpoints.mjs';
+import { recommendIntervention } from './status.mjs';
 import { loadQualityGates, runQualityGates } from './gates.mjs';
 import { loadAuditSpec, runAudit } from './audit.mjs';
 import { runClaude } from './adapters/claude.mjs';
@@ -284,7 +286,11 @@ async function main() {
     process.exit(1);
   }
   success('Audit passed');
-  saveState(markProgress({ ...state, phase: 'discover', activeRole: 'code-explorer' }, 'audit complete'));
+  const audited = markProgress({ ...state, phase: 'discover', activeRole: 'code-explorer' }, 'audit complete');
+  audited.lastSuccessfulCheckpoint = 'audit';
+  audited.recommendedIntervention = recommendIntervention(audited);
+  saveState(audited);
+  appendCheckpoint(HARNESS_DIR, { timestamp: new Date().toISOString(), phase: 'audit', activeFeature: '', summary: 'audit complete', verdict: 'PASS' });
 
   const mode = loadState().mode || config.project?.mode || '';
   const mustDiscover = mode === 'C' || mode === 'Adopt' || Boolean(config.pipeline?.role_routing?.adopt_requires);
@@ -297,6 +303,9 @@ async function main() {
   debug(`plan verdict=${extractVerdict(plan)}`);
   nextState = loadState();
   nextState = markProgress({ ...nextState, phase: 'implement', activeRole: 'implementer' }, 'plan complete');
+  nextState.lastSuccessfulCheckpoint = 'plan';
+  nextState.recommendedIntervention = recommendIntervention(nextState);
+  appendCheckpoint(HARNESS_DIR, { timestamp: new Date().toISOString(), phase: 'plan', activeFeature: '', summary: 'plan complete', verdict: 'PASS' });
   saveState(nextState);
 
   let reviewOutput = null;
@@ -331,6 +340,7 @@ async function main() {
       loopState.status = 'paused';
       loopState.stopCondition = 'gate-commands-unconfigured';
       loopState.summary = 'quality gate commands are not configured yet';
+      loopState.recommendedIntervention = recommendIntervention(loopState);
       saveState(loopState);
       warn('Pausing because quality gate commands are not configured');
       process.exit(0);
@@ -359,7 +369,13 @@ async function main() {
     verdict = extractVerdict(reviewOutput);
     loopState.lastReviewResult = verdict;
     loopState.summary = `review verdict: ${verdict}`;
-    saveState(markProgress(loopState, loopState.summary));
+    loopState.recommendedIntervention = recommendIntervention(loopState);
+    const reviewed = markProgress(loopState, loopState.summary);
+    if (verdict === 'PASS' || verdict === 'WARNING_ONLY') {
+      reviewed.lastSuccessfulCheckpoint = 'review';
+      appendCheckpoint(HARNESS_DIR, { timestamp: new Date().toISOString(), phase: 'review', activeFeature: reviewed.activeFeature || '', summary: reviewed.summary, verdict });
+    }
+    saveState(reviewed);
 
     const reviewLower = String(reviewOutput || '').toLowerCase();
     const escalateSignal = extractMachineSignal(reviewOutput, 'escalate').toLowerCase();
@@ -400,6 +416,7 @@ async function main() {
   finalState.phase = '';
   finalState.activeRole = '';
   finalState.summary = `pipeline finished with ${effectiveVerdict}`;
+  finalState.recommendedIntervention = recommendIntervention(finalState);
   saveState(finalState);
 
   debug(`final verdict=${effectiveVerdict}`);

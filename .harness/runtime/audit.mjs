@@ -18,6 +18,7 @@ export function runAudit({ spec, projectRoot, harnessDir }) {
     { category: 'memory_persistence', label: 'session-state.json exists', ok: existsSync(`${harnessDir}/session-state.json`), path: '.harness/session-state.json' },
     { category: 'eval_coverage', label: 'feature_list.json exists', ok: existsSync(`${harnessDir}/feature_list.json`), path: '.harness/feature_list.json' },
     { category: 'memory_persistence', label: 'patterns dir exists', ok: existsSync(`${harnessDir}/patterns`), path: '.harness/patterns' },
+    { category: 'memory_persistence', label: 'checkpoint support exists', ok: existsSync(`${harnessDir}/runtime/checkpoints.mjs`), path: '.harness/runtime/checkpoints.mjs' },
     { category: 'role_routing_completeness', label: 'orchestration rules documented', ok: existsSync(`${projectRoot}/docs/orchestration-rules.md`), path: 'docs/orchestration-rules.md' },
     { category: 'context_routing_discipline', label: 'context routing documented', ok: existsSync(`${projectRoot}/docs/context-routing.md`), path: 'docs/context-routing.md' },
     { category: 'role_composition_readiness', label: 'role composition documented', ok: existsSync(`${projectRoot}/docs/role-composition.md`), path: 'docs/role-composition.md' },
