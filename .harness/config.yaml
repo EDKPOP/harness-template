@@ -26,15 +26,15 @@ agents:
     role_file: ".harness/roles/initializer.md"
 
   explorer:
-    engine: gemini
+    engine: claude
     role_file: ".harness/roles/code-explorer.md"
 
   architect:
-    engine: gemini
+    engine: claude
     role_file: ".harness/roles/code-architect.md"
 
   planner:
-    engine: gemini
+    engine: claude
     role_file: ".harness/roles/planner.md"
 
   implementer:

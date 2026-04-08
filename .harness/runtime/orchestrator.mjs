@@ -273,6 +273,18 @@ function appendInstinctCandidate(reviewOutput) {
   } catch {}
 }
 
+
+function sendPhase(harnessDir, phase, status, summary) {
+  const event = buildPhaseEvent(phase, status, summary);
+  appendNotification(harnessDir, event);
+  writeLatestNotification(harnessDir, event);
+  try { execSync(buildNotifierCommand(harnessDir, event.phase, event.status, event.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+}
+
+function sendHeartbeat(phase, summary) {
+  sendPhase(HARNESS_DIR, phase, 'heartbeat', summary);
+}
+
 function extractVerdict(text) {
   const machine = extractMachineSignal(text, 'verdict');
   if (machine) return machine.toUpperCase();
@@ -293,18 +305,12 @@ async function main() {
   state.phase = 'audit';
   state.maxIterations = config.pipeline?.loop?.max_iterations || 3;
   saveState(state);
-  const startEvent = buildPhaseEvent('intake', 'completed', 'project initialized, moving to audit');
-  appendNotification(HARNESS_DIR, startEvent);
-  writeLatestNotification(HARNESS_DIR, startEvent);
-  try { execSync(buildNotifierCommand(HARNESS_DIR, startEvent.phase, startEvent.status, startEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+  sendPhase(HARNESS_DIR, 'intake', 'completed', 'project initialized, moving to audit');
 
   const auditSpec = loadAuditSpec(join(HARNESS_DIR, 'audit-spec.json'));
   const auditResult = runAudit({ spec: auditSpec, projectRoot: PROJECT_ROOT, harnessDir: HARNESS_DIR });
   writeArtifact('audit', timestamp, JSON.stringify(auditResult, null, 2));
-  const auditEvent = buildPhaseEvent('audit', auditResult.verdict === 'PASS' ? 'completed' : 'failed', auditResult.verdict === 'PASS' ? 'Audit passed' : `Audit failed: ${(auditResult.top_actions || []).join('; ')}`, { topActions: auditResult.top_actions || [] });
-  appendNotification(HARNESS_DIR, auditEvent);
-  writeLatestNotification(HARNESS_DIR, auditEvent);
-  try { execSync(buildNotifierCommand(HARNESS_DIR, auditEvent.phase, auditEvent.status, auditEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+  sendPhase(HARNESS_DIR, 'audit', auditResult.verdict === 'PASS' ? 'completed' : 'failed', auditResult.verdict === 'PASS' ? 'Audit passed' : `Audit failed: ${(auditResult.top_actions || []).join('; ')}`);
   debug(`audit verdict=${auditResult.verdict}`);
   if (auditResult.verdict !== 'PASS') {
     state.status = 'failed';
@@ -321,32 +327,22 @@ async function main() {
   saveState(audited);
   appendCheckpoint(HARNESS_DIR, { timestamp: new Date().toISOString(), phase: 'audit', activeFeature: '', summary: 'audit complete', verdict: 'PASS' });
 
-  const discoverStartEvent = buildPhaseEvent('discover', 'started', 'starting discovery');
-  appendNotification(HARNESS_DIR, discoverStartEvent);
-  writeLatestNotification(HARNESS_DIR, discoverStartEvent);
-  try { execSync(buildNotifierCommand(HARNESS_DIR, discoverStartEvent.phase, discoverStartEvent.status, discoverStartEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+  sendPhase(HARNESS_DIR, 'discover', 'started', 'starting discovery');
+  sendHeartbeat('discover', 'discovery running');
 
   const mode = loadState().mode || config.project?.mode || '';
   const rawMode = String(mode || '').toLowerCase();
   const mustDiscover = !['resume', 'resumed'].includes(rawMode);
   const discovery = mustDiscover ? runDiscovery(config, timestamp) : '';
-  const discoverEvent = buildPhaseEvent('discover', 'completed', 'discovery completed');
-  appendNotification(HARNESS_DIR, discoverEvent);
-  writeLatestNotification(HARNESS_DIR, discoverEvent);
-  try { execSync(buildNotifierCommand(HARNESS_DIR, discoverEvent.phase, discoverEvent.status, discoverEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+  sendPhase(HARNESS_DIR, 'discover', 'completed', 'discovery completed');
   let nextState = loadState();
   nextState = markProgress({ ...nextState, phase: 'plan', activeRole: 'planner' }, 'discovery complete');
   saveState(nextState);
-  const planStartEvent = buildPhaseEvent('plan', 'started', 'starting planning');
-  appendNotification(HARNESS_DIR, planStartEvent);
-  writeLatestNotification(HARNESS_DIR, planStartEvent);
-  try { execSync(buildNotifierCommand(HARNESS_DIR, planStartEvent.phase, planStartEvent.status, planStartEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+  sendPhase(HARNESS_DIR, 'plan', 'started', 'starting planning');
+  sendHeartbeat('plan', 'planning running');
 
   const plan = runPlanning(config, timestamp, discovery);
-  const planEvent = buildPhaseEvent('plan', 'completed', 'Planning completed', { verdict: extractVerdict(plan), approvalGate: '' });
-  appendNotification(HARNESS_DIR, planEvent);
-  writeLatestNotification(HARNESS_DIR, planEvent);
-  try { execSync(buildNotifierCommand(HARNESS_DIR, planEvent.phase, planEvent.status, planEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+  sendPhase(HARNESS_DIR, 'plan', 'completed', 'Planning completed');
   debug(`plan verdict=${extractVerdict(plan)}`);
   nextState = loadState();
   nextState = markProgress({ ...nextState, phase: 'plan', activeRole: 'planner' }, 'plan complete');
@@ -367,10 +363,7 @@ async function main() {
     saveState(finalState);
     const finalStatus = summarizeStatus(finalState);
     writeArtifact('status', getTimestamp(), JSON.stringify(finalStatus, null, 2));
-    const finalEvent = buildPhaseEvent('implement', 'paused', finalState.summary, finalStatus);
-    appendNotification(HARNESS_DIR, finalEvent);
-    writeLatestNotification(HARNESS_DIR, finalEvent);
-    try { execSync(buildNotifierCommand(HARNESS_DIR, finalEvent.phase, finalEvent.status, finalEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+    sendPhase(HARNESS_DIR, 'implement', 'paused', finalState.summary);
     success(finalState.summary);
     process.exit(0);
   }
