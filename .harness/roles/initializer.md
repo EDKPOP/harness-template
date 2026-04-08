@@ -13,3 +13,8 @@
 
 ## Must Not
 - 하네스 준비를 넘는 제품 기능 구현을 하지 않는다
+
+## Stack-aware bootstrap rules
+- populate quality-gates defaults based on stack language and package manager
+- ensure state surfaces exist before the first real run
+- ensure adapter surfaces are present before planner or implementer work begins

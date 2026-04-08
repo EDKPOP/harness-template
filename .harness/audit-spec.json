@@ -3,10 +3,10 @@
     "tool_coverage",
     "context_efficiency",
     "quality_gates",
-    "state_observability",
-    "eval_schema",
-    "learning_escalation",
-    "adapter_integrity",
+    "memory_persistence",
+    "eval_coverage",
+    "security_guardrails",
+    "cost_efficiency",
     "role_routing_completeness",
     "context_routing_discipline",
     "role_composition_readiness",
@@ -55,5 +55,18 @@
       "escalation graph is documented",
       "optimizer target classes are defined"
     ]
+  },
+  "scoring": {
+    "tool_coverage": 10,
+    "context_efficiency": 10,
+    "quality_gates": 10,
+    "memory_persistence": 10,
+    "eval_coverage": 10,
+    "security_guardrails": 10,
+    "cost_efficiency": 10,
+    "role_routing_completeness": 10,
+    "context_routing_discipline": 10,
+    "role_composition_readiness": 10,
+    "escalation_graph_completeness": 10
   }
 }
