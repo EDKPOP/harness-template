@@ -327,7 +327,8 @@ async function main() {
   try { execSync(buildNotifierCommand(HARNESS_DIR, discoverStartEvent.phase, discoverStartEvent.status, discoverStartEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
 
   const mode = loadState().mode || config.project?.mode || '';
-  const mustDiscover = mode === 'C' || mode === 'Adopt' || Boolean(config.pipeline?.role_routing?.adopt_requires);
+  const rawMode = String(mode || '').toLowerCase();
+  const mustDiscover = !['resume', 'resumed'].includes(rawMode);
   const discovery = mustDiscover ? runDiscovery(config, timestamp) : '';
   const discoverEvent = buildPhaseEvent('discover', 'completed', 'discovery completed');
   appendNotification(HARNESS_DIR, discoverEvent);
