@@ -27,3 +27,13 @@
 ## Instinct promotion
 - repeated issue with reusable trigger/response form -> instinct candidate
 - instincts should be concise, reusable, and tied to a clear escalation target
+
+
+## Structured Output Contract
+Return:
+
+```md
+## Machine Signals
+promote_to: learning | pattern | instinct | gate | rule | adapter
+reason: short-slug
+```

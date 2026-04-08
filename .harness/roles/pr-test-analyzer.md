@@ -8,3 +8,13 @@
 - brittle tests
 - false confidence
 - regression blind spots
+
+
+## Structured Output Contract
+Return:
+
+```md
+## Machine Signals
+verdict: SUFFICIENT | INSUFFICIENT
+reason: short-slug
+```

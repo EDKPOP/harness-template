@@ -49,3 +49,14 @@
 
 ## Escalation Recommendation
 ```
+
+
+## Structured Output Contract
+Include an explicit machine-readable footer:
+
+```md
+## Machine Signals
+verdict: PASS | WARNING_ONLY | FAIL
+escalate: none | silent_failure_hunter | pr_test_analyzer | harness_optimizer | council
+reason: short-slug
+```

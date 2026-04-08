@@ -69,6 +69,27 @@ function parseYaml(text) {
   return result;
 }
 
+
+function extractMachineSignal(text, key) {
+  const re = new RegExp(`${key}:\s*([^\n]+)`, 'i');
+  const m = String(text || '').match(re);
+  return m ? m[1].trim() : '';
+}
+
+function dryRunOutput(roleName) {
+  const outputs = {
+    'code-explorer.md': '# Discovery\n\n## Machine Signals\nverdict: PASS\nescalate: none\nreason: discovery-complete\n',
+    'planner.md': '# Plan\n\n## Machine Signals\nverdict: PASS\nescalate: none\nreason: plan-complete\n',
+    'implementer.md': '# Implementation Log\n\n## Machine Signals\nverdict: PASS\nescalate: none\nreason: impl-complete\n',
+    'reviewer.md': '# Code Review Report\n\n## Machine Signals\nverdict: WARNING_ONLY\nescalate: none\nreason: dry-run-review\n',
+    'silent-failure-hunter.md': '# Silent Failure Analysis\n\n## Machine Signals\nverdict: NOT_CONFIRMED\nreason: dry-run\n',
+    'pr-test-analyzer.md': '# Test Analysis\n\n## Machine Signals\nverdict: SUFFICIENT\nreason: dry-run\n',
+    'harness-optimizer.md': '# Optimization\n\n## Machine Signals\npromote_to: learning\nreason: dry-run\n',
+    'council.md': '# Council\n\n## Machine Signals\nverdict: PASS\nescalate: none\nreason: dry-run-council\n',
+  };
+  return outputs[roleName] || `# Dry Run\n\n## Machine Signals\nverdict: PASS\nescalate: none\nreason: dry-run-${roleName}`;
+}
+
 function readFile(path) {
   if (!existsSync(path)) return null;
   return readFileSync(path, 'utf-8');
@@ -124,10 +145,11 @@ function buildPrompt(roleFile, extras = {}) {
   return parts.join('\n');
 }
 
-function runAgent(agent, prompt) {
-  if (agent === 'claude') return runClaude(prompt, { cwd: PROJECT_ROOT, dryRun: DRY_RUN });
-  if (agent === 'codex') return runCodex(prompt, { cwd: PROJECT_ROOT, dryRun: DRY_RUN });
-  if (agent === 'gemini') return runGemini(prompt, { cwd: PROJECT_ROOT, dryRun: DRY_RUN });
+function runAgent(agent, prompt, roleName = '') {
+  if (DRY_RUN) return dryRunOutput(roleName);
+  if (agent === 'claude') return runClaude(prompt, { cwd: PROJECT_ROOT, dryRun: false });
+  if (agent === 'codex') return runCodex(prompt, { cwd: PROJECT_ROOT, dryRun: false });
+  if (agent === 'gemini') return runGemini(prompt, { cwd: PROJECT_ROOT, dryRun: false });
   throw new Error(`Unknown agent engine: ${agent}`);
 }
 
@@ -135,7 +157,8 @@ function runDiscovery(config, timestamp) {
   const roleFile = config.agents?.explorer?.role_file || '.harness/roles/code-explorer.md';
   const engine = config.agents?.explorer?.engine || 'gemini';
   const prompt = buildPrompt(roleFile.split('/').pop());
-  const output = runAgent(engine, prompt);
+  const roleName = roleFile.split('/').pop();
+  const output = runAgent(engine, prompt, roleName);
   writeArtifact('discover', timestamp, output);
   return output;
 }
@@ -144,7 +167,8 @@ function runPlanning(config, timestamp, discovery) {
   const roleFile = config.agents?.planner?.role_file || '.harness/roles/planner.md';
   const engine = config.agents?.planner?.engine || 'gemini';
   const prompt = buildPrompt(roleFile.split('/').pop(), { discovery });
-  const output = runAgent(engine, prompt);
+  const roleName = roleFile.split('/').pop();
+  const output = runAgent(engine, prompt, roleName);
   writeArtifact('plan', timestamp, output);
   return output;
 }
@@ -154,7 +178,8 @@ function runImplementation(config, timestamp, plan, review = null, gate = null) 
   const engine = config.agents?.implementer?.engine || 'claude';
   const learnings = readFile(join(HARNESS_DIR, 'learnings.md'));
   const prompt = buildPrompt(roleFile.split('/').pop(), { plan, review, gate, learnings });
-  const output = runAgent(engine, prompt);
+  const roleName = roleFile.split('/').pop();
+  const output = runAgent(engine, prompt, roleName);
   writeArtifact('impl', timestamp, output);
   return output;
 }
@@ -169,7 +194,8 @@ function runReview(config, timestamp, plan, gateOutput) {
     diff = 'No diff';
   }
   const prompt = buildPrompt(roleFile.split('/').pop(), { plan, diff, gate: gateOutput });
-  const output = runAgent(engine, prompt);
+  const roleName = roleFile.split('/').pop();
+  const output = runAgent(engine, prompt, roleName);
   writeArtifact('review', timestamp, output);
   return output;
 }
@@ -178,7 +204,8 @@ function maybeRunOptimizer(config, timestamp, reviewOutput) {
   const roleFile = config.agents?.harness_optimizer?.role_file || '.harness/roles/harness-optimizer.md';
   const engine = config.agents?.harness_optimizer?.engine || 'claude';
   const prompt = buildPrompt(roleFile.split('/').pop(), { review: reviewOutput, learnings: readFile(join(HARNESS_DIR, 'learnings.md')) });
-  const output = runAgent(engine, prompt);
+  const roleName = roleFile.split('/').pop();
+  const output = runAgent(engine, prompt, roleName);
   writeArtifact('optimize', timestamp, output);
   return output;
 }
@@ -191,7 +218,8 @@ function shouldInvokeCouncil(config, state, reviewOutput = '') {
 function maybeRunCouncil(config, timestamp, state, reviewOutput = '') {
   const target = { role_file: '.harness/roles/council.md', engine: config.agents?.architect?.engine || 'gemini' };
   const prompt = buildPrompt(target.role_file.split('/').pop(), { review: reviewOutput, learnings: readFile(join(HARNESS_DIR, 'learnings.md')) });
-  const output = runAgent(target.engine, prompt);
+  const roleName = target.role_file.split('/').pop();
+  const output = runAgent(target.engine, prompt, roleName);
   writeArtifact('council', timestamp, output);
   return output;
 }
@@ -204,7 +232,8 @@ function maybeRunAnalyzer(config, timestamp, kind, reviewOutput, gateOutput) {
   const target = mapping[kind];
   if (!target?.role_file || !target?.engine) return null;
   const prompt = buildPrompt(target.role_file.split('/').pop(), { review: reviewOutput, gate: gateOutput, plan: readFile(join(ARTIFACTS_DIR, 'plan-latest.md')), learnings: readFile(join(HARNESS_DIR, 'learnings.md')) });
-  const output = runAgent(target.engine, prompt);
+  const roleName = target.role_file.split('/').pop();
+  const output = runAgent(target.engine, prompt, roleName);
   writeArtifact(kind === 'silent' ? 'silent-failure' : 'test-analysis', timestamp, output);
   return output;
 }
@@ -213,12 +242,8 @@ function maybeRunAnalyzer(config, timestamp, kind, reviewOutput, gateOutput) {
 function appendInstinctCandidate(reviewOutput) {
   const instinctsDir = join(HARNESS_DIR, 'instincts');
   const path = join(instinctsDir, 'auto-candidates.md');
-  const entry = `
-## ${new Date().toISOString()}
-- source: review
-- note: ${String(reviewOutput || '').slice(0, 300).replace(/
-/g, ' ')}
-`;
+  const note = String(reviewOutput || '').slice(0, 300).replace(/\n/g, ' ');
+  const entry = `\n## ${new Date().toISOString()}\n- source: review\n- note: ${note}\n`;
   try {
     const prev = existsSync(path) ? readFile(path) || '' : '';
     writeFileSync(path, prev + entry, 'utf-8');
@@ -226,6 +251,8 @@ function appendInstinctCandidate(reviewOutput) {
 }
 
 function extractVerdict(text) {
+  const machine = extractMachineSignal(text, 'verdict');
+  if (machine) return machine.toUpperCase();
   if (!text) return DRY_RUN ? 'WARNING_ONLY' : 'FAIL';
   const direct = text.match(/(PASS|WARNING_ONLY|FAIL)/i);
   if (direct) return direct[1].toUpperCase();
@@ -329,11 +356,15 @@ async function main() {
     saveState(markProgress(loopState, loopState.summary));
 
     const reviewLower = String(reviewOutput || '').toLowerCase();
-    if (routing.hidden_failure_requires && (reviewLower.includes('silent failure') || reviewLower.includes('swallowed') || reviewLower.includes('fake success'))) {
+    const escalateSignal = extractMachineSignal(reviewOutput, 'escalate').toLowerCase();
+    if (routing.hidden_failure_requires && (escalateSignal === 'silent_failure_hunter' || reviewLower.includes('silent failure') || reviewLower.includes('swallowed') || reviewLower.includes('fake success'))) {
       maybeRunAnalyzer(config, getTimestamp(), 'silent', reviewOutput, gateOutput);
     }
-    if (routing.weak_test_signal_requires && (reviewLower.includes('test coverage') || reviewLower.includes('regression coverage') || reviewLower.includes('misleading test'))) {
+    if (routing.weak_test_signal_requires && (escalateSignal === 'pr_test_analyzer' || reviewLower.includes('test coverage') || reviewLower.includes('regression coverage') || reviewLower.includes('misleading test'))) {
       maybeRunAnalyzer(config, getTimestamp(), 'test', reviewOutput, gateOutput);
+    }
+    if (escalateSignal === 'council') {
+      maybeRunCouncil(config, getTimestamp(), loopState, reviewOutput);
     }
 
     if (verdict === 'PASS' || verdict === 'WARNING_ONLY') break;

@@ -9,3 +9,13 @@
 - missing state propagation
 - unverified async behavior
 - observability gaps
+
+
+## Structured Output Contract
+Return:
+
+```md
+## Machine Signals
+verdict: CONFIRMED | NOT_CONFIRMED
+reason: short-slug
+```
