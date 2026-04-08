@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HARNESS_DIR="$ROOT_DIR/.harness"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HARNESS_DIR="$SCRIPT_DIR"
+ROOT_DIR="$(cd "$HARNESS_DIR/.." && pwd)"
 CONFIG_PATH="$HARNESS_DIR/config.yaml"
 GATES_PATH="$HARNESS_DIR/quality-gates.json"
 STATE_PATH="$HARNESS_DIR/session-state.json"
