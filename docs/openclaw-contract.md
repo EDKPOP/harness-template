@@ -15,3 +15,7 @@ OpenClaw should treat the project-local harness as the execution authority.
 
 ## Trust model
 If project-local state and chat assumptions differ, prefer the project-local state.
+
+
+## Phase rerun rule
+When OpenClaw reruns a single phase outside the full orchestrator, it should use `.harness/runtime/phase-runner.mjs` to sync state and notifications instead of writing artifacts silently.

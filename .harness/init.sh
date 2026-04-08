@@ -130,4 +130,18 @@ state.setdefault('blockers', [])
 json.dump(state, open(path, 'w'), indent=2)
 PY
 
+python3 - <<'PY2' "$STATE_PATH"
+import json, sys
+path=sys.argv[1]
+state=json.load(open(path))
+state["phase"]=""
+state["activeRole"]=""
+state["stopCondition"]=""
+state["lastFailureSignature"]=""
+state["sameFailureCount"]=0
+state["iteration"]=0
+state["recommendedIntervention"]="continue"
+json.dump(state, open(path, "w"), indent=2)
+PY2
+
 echo "[harness:init] baseline gate defaults and state bootstrap complete"
