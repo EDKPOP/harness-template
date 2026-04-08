@@ -1,9 +1,9 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 export function runCodex(prompt, { cwd, dryRun = false }) {
-  const command = `codex exec ${JSON.stringify(prompt)}`;
-  if (dryRun) return `[DRY RUN] ${command}`;
-  return execSync(command, {
+  const args = ['exec', prompt];
+  if (dryRun) return `[DRY RUN] codex ${args.join(' ')}`;
+  return execFileSync('codex', args, {
     cwd,
     encoding: 'utf-8',
     timeout: 600000,

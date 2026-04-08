@@ -1,9 +1,9 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 export function runGemini(prompt, { cwd, dryRun = false }) {
-  const command = `gemini --approval-mode plan -p ${JSON.stringify(prompt)}`;
-  if (dryRun) return `[DRY RUN] ${command}`;
-  return execSync(command, {
+  const args = ['--approval-mode', 'plan', '-p', prompt];
+  if (dryRun) return `[DRY RUN] gemini ${args.join(' ')}`;
+  return execFileSync('gemini', args, {
     cwd,
     encoding: 'utf-8',
     timeout: 600000,

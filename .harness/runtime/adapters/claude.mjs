@@ -1,9 +1,9 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 export function runClaude(prompt, { cwd, dryRun = false }) {
-  const command = `claude --permission-mode bypassPermissions --print ${JSON.stringify(prompt)}`;
-  if (dryRun) return `[DRY RUN] ${command}`;
-  return execSync(command, {
+  const args = ['--permission-mode', 'bypassPermissions', '--print', prompt];
+  if (dryRun) return `[DRY RUN] claude ${args.join(' ')}`;
+  return execFileSync('claude', args, {
     cwd,
     encoding: 'utf-8',
     timeout: 600000,
