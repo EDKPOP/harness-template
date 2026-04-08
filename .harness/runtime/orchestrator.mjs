@@ -325,29 +325,31 @@ async function main() {
   saveState(nextState);
 
   const plan = runPlanning(config, timestamp, discovery);
-  const approval = requiresApproval(loadState(), 'plan');
-  const planEvent = buildPhaseEvent('plan', approval.required ? 'awaiting_approval' : 'completed', approval.required ? `Planning completed, waiting for ${approval.gate}` : 'Planning completed', { verdict: extractVerdict(plan), approvalGate: approval.gate || '' });
+  const planEvent = buildPhaseEvent('plan', 'completed', 'Planning completed', { verdict: extractVerdict(plan), approvalGate: '' });
   appendNotification(HARNESS_DIR, planEvent);
   writeLatestNotification(HARNESS_DIR, planEvent);
   try { execSync(buildNotifierCommand(HARNESS_DIR, planEvent.phase, planEvent.status, planEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
   debug(`plan verdict=${extractVerdict(plan)}`);
   nextState = loadState();
-  nextState = markProgress({ ...nextState, phase: 'plan', activeRole: 'planner' }, approval.required ? `plan waiting for ${approval.gate}` : 'plan complete');
+  nextState = markProgress({ ...nextState, phase: 'plan', activeRole: 'planner' }, 'plan complete');
   nextState.lastSuccessfulCheckpoint = 'plan';
-  nextState.recommendedIntervention = approval.required ? `await ${approval.gate}` : recommendIntervention(nextState);
-  appendCheckpoint(HARNESS_DIR, { timestamp: new Date().toISOString(), phase: 'plan', activeFeature: '', summary: approval.required ? `plan waiting for ${approval.gate}` : 'plan complete', verdict: approval.required ? 'AWAITING_APPROVAL' : 'PASS' });
+  nextState.recommendedIntervention = recommendIntervention(nextState);
+  appendCheckpoint(HARNESS_DIR, { timestamp: new Date().toISOString(), phase: 'plan', activeFeature: '', summary: 'plan complete', verdict: 'PASS' });
   saveState(nextState);
 
-  if (approval.required || !autoAdvanceEnabled(config)) {
+  const implementApproval = requiresApproval(loadState(), 'implement');
+  if (implementApproval.required || !autoAdvanceEnabled(config)) {
     const finalState = loadState();
     finalState.status = 'paused';
-    finalState.stopCondition = approval.gate || 'auto-advance-disabled';
-    finalState.summary = approval.required ? `paused for ${approval.gate}` : 'paused because auto advance is disabled';
-    finalState.recommendedIntervention = approval.required ? `await ${approval.gate}` : 'continue';
+    finalState.phase = 'implement';
+    finalState.activeRole = 'implementer';
+    finalState.stopCondition = implementApproval.gate || 'auto-advance-disabled';
+    finalState.summary = implementApproval.required ? `paused for ${implementApproval.gate}` : 'paused because auto advance is disabled';
+    finalState.recommendedIntervention = implementApproval.required ? `await ${implementApproval.gate}` : 'continue';
     saveState(finalState);
     const finalStatus = summarizeStatus(finalState);
     writeArtifact('status', getTimestamp(), JSON.stringify(finalStatus, null, 2));
-    const finalEvent = buildPhaseEvent('final', 'paused', finalState.summary, finalStatus);
+    const finalEvent = buildPhaseEvent('implement', 'paused', finalState.summary, finalStatus);
     appendNotification(HARNESS_DIR, finalEvent);
     writeLatestNotification(HARNESS_DIR, finalEvent);
     try { execSync(buildNotifierCommand(HARNESS_DIR, finalEvent.phase, finalEvent.status, finalEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}

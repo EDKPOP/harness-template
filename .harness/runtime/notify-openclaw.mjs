@@ -29,11 +29,15 @@ if (payloadPath && existsSync(payloadPath)) {
   } catch {}
 }
 
+const phaseNumMap = { intake: '0', audit: '0.5', discover: '1', plan: '2', implement: '3', gate: '4', review: '5', optimize: '6', final: 'done' };
+const label = phaseNumMap[phase] || phase;
+const message = `phase ${label}. ${summary}`;
 const envelope = {
   kind: 'vibecoding-phase-notification',
   phase,
   status,
   summary,
+  message,
   target: {
     chatId: targetChatId,
     channel: targetChannel,
