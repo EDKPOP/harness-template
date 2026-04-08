@@ -70,6 +70,21 @@ pipeline:
 
   scale: project
 
+  role_routing:
+    adopt_requires:
+      - explorer
+      - planner
+    structural_change_requires:
+      - architect
+    hidden_failure_requires:
+      - silent_failure_hunter
+    weak_test_signal_requires:
+      - pr_test_analyzer
+    repeated_failure_requires:
+      - harness_optimizer
+    ambiguous_scope_requires:
+      - council
+
   loop:
     max_iterations: 3
     max_same_failure: 2

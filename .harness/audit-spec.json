@@ -6,7 +6,9 @@
     "state_observability",
     "eval_schema",
     "learning_escalation",
-    "adapter_integrity"
+    "adapter_integrity",
+    "role_routing_completeness",
+    "context_routing_discipline"
   ],
   "checks": {
     "tool_coverage": [
@@ -34,6 +36,14 @@
       "GEMINI.md exists",
       ".claude/CLAUDE.md exists",
       ".claude/agents exists"
+    ],
+    "role_routing_completeness": [
+      "role routing rules are defined in config",
+      "conditional roles exist for escalation paths"
+    ],
+    "context_routing_discipline": [
+      "context routing guidance exists in docs",
+      "role prompts do not assume full-context injection"
     ]
   }
 }

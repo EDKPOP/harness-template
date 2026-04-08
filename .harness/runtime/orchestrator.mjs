@@ -259,6 +259,7 @@ async function main() {
 
     const gates = loadQualityGates(join(HARNESS_DIR, 'quality-gates.json'));
     const gateResult = runQualityGates({ gates, cwd: PROJECT_ROOT, dryRun: DRY_RUN });
+    const routing = config.pipeline?.role_routing || {};
     gateOutput = JSON.stringify(gateResult, null, 2);
     writeArtifact('gate', getTimestamp(), gateOutput);
 
@@ -297,10 +298,10 @@ async function main() {
     saveState(markProgress(loopState, loopState.summary));
 
     const reviewLower = String(reviewOutput || '').toLowerCase();
-    if (reviewLower.includes('silent failure') || reviewLower.includes('swallowed') || reviewLower.includes('fake success')) {
+    if (routing.hidden_failure_requires && (reviewLower.includes('silent failure') || reviewLower.includes('swallowed') || reviewLower.includes('fake success'))) {
       maybeRunAnalyzer(config, getTimestamp(), 'silent', reviewOutput, gateOutput);
     }
-    if (reviewLower.includes('test coverage') || reviewLower.includes('regression coverage') || reviewLower.includes('misleading test')) {
+    if (routing.weak_test_signal_requires && (reviewLower.includes('test coverage') || reviewLower.includes('regression coverage') || reviewLower.includes('misleading test'))) {
       maybeRunAnalyzer(config, getTimestamp(), 'test', reviewOutput, gateOutput);
     }
 

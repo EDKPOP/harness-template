@@ -10,3 +10,10 @@
 - 같은 실패의 재발 원인
 - 더 강한 규칙으로 막을 수 있는지
 - learnings -> patterns -> rules 승격 후보
+
+## Escalation targets
+- learnings.md
+- patterns/*
+- AGENTS-level rule proposals
+- quality gate strengthening proposals
+- adapter or role prompt changes

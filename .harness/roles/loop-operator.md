@@ -8,3 +8,8 @@
 - progressDelta가 0인지
 - retry가 맞는지, escalation이 맞는지, 중단이 맞는지
 - 다음 역할 호출 결정
+
+## Required decisions
+- decide whether to retry, escalate, or stop
+- block repeated blind retries
+- require council when route ambiguity remains unresolved
