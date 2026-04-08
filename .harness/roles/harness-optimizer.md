@@ -23,3 +23,7 @@
 - repeated issue without clear prevention -> pattern
 - repeated issue with mechanical prevention path -> gate proposal
 - repeated issue with behavioral guidance fix -> role prompt or AGENTS proposal
+
+## Instinct promotion
+- repeated issue with reusable trigger/response form -> instinct candidate
+- instincts should be concise, reusable, and tied to a clear escalation target

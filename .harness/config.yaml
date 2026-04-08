@@ -109,5 +109,7 @@ audit:
 learning:
   learnings_file: ".harness/learnings.md"
   patterns_dir: ".harness/patterns"
+  instincts_dir: ".harness/instincts"
   auto_extract: true
   escalate_after_repeats: 2
+  instinct_after_repeats: 3

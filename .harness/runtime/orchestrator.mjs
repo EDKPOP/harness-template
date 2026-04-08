@@ -209,6 +209,22 @@ function maybeRunAnalyzer(config, timestamp, kind, reviewOutput, gateOutput) {
   return output;
 }
 
+
+function appendInstinctCandidate(reviewOutput) {
+  const instinctsDir = join(HARNESS_DIR, 'instincts');
+  const path = join(instinctsDir, 'auto-candidates.md');
+  const entry = `
+## ${new Date().toISOString()}
+- source: review
+- note: ${String(reviewOutput || '').slice(0, 300).replace(/
+/g, ' ')}
+`;
+  try {
+    const prev = existsSync(path) ? readFile(path) || '' : '';
+    writeFileSync(path, prev + entry, 'utf-8');
+  } catch {}
+}
+
 function extractVerdict(text) {
   if (!text) return DRY_RUN ? 'WARNING_ONLY' : 'FAIL';
   const direct = text.match(/(PASS|WARNING_ONLY|FAIL)/i);
@@ -331,6 +347,7 @@ async function main() {
     }
 
     if ((loopState.sameFailureCount || 0) >= (config.pipeline?.loop?.max_same_failure || 2)) {
+      appendInstinctCandidate(reviewOutput);
       maybeRunOptimizer(config, getTimestamp(), reviewOutput);
       loopState.status = 'failed';
       loopState.stopCondition = 'same-review-failure';
