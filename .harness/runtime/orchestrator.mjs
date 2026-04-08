@@ -159,20 +159,20 @@ function runAgent(agent, prompt, roleName = '') {
 
 function runDiscovery(config, timestamp) {
   const roleFile = config.agents?.explorer?.role_file || '.harness/roles/code-explorer.md';
-  const engine = config.agents?.explorer?.engine || 'gemini';
+  const engine = config.agents?.explorer?.engine || 'claude';
   const prompt = buildPrompt(roleFile.split('/').pop());
   const roleName = roleFile.split('/').pop();
-  const output = runAgent(engine, prompt, roleName);
+  const output = withFallback(engine, 'claude', (selected) => runAgent(selected, prompt, roleName), (_error, fb) => sendHeartbeat('discover', `fallback to ${fb}`));
   writeArtifact('discover', timestamp, output);
   return output;
 }
 
 function runPlanning(config, timestamp, discovery) {
   const roleFile = config.agents?.planner?.role_file || '.harness/roles/planner.md';
-  const engine = config.agents?.planner?.engine || 'gemini';
+  const engine = config.agents?.planner?.engine || 'claude';
   const prompt = buildPrompt(roleFile.split('/').pop(), { discovery });
   const roleName = roleFile.split('/').pop();
-  const output = runAgent(engine, prompt, roleName);
+  const output = withFallback(engine, 'claude', (selected) => runAgent(selected, prompt, roleName), (_error, fb) => sendHeartbeat('plan', `fallback to ${fb}`));
   writeArtifact('plan', timestamp, output);
   return output;
 }
@@ -283,6 +283,16 @@ function sendPhase(harnessDir, phase, status, summary) {
 
 function sendHeartbeat(phase, summary) {
   sendPhase(HARNESS_DIR, phase, 'heartbeat', summary);
+}
+
+function withFallback(primary, fallback, work, onFallback) {
+  try {
+    return work(primary);
+  } catch (error) {
+    if (!fallback || fallback === primary) throw error;
+    onFallback?.(error, fallback);
+    return work(fallback);
+  }
 }
 
 function extractVerdict(text) {
