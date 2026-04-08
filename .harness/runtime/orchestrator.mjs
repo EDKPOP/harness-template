@@ -149,9 +149,23 @@ function buildPrompt(roleFile, extras = {}) {
   return parts.join('\n');
 }
 
+function runClaudeRole(roleName, prompt) {
+  const agentName = String(roleName || '').replace('.md', '');
+  const agentPath = join(PROJECT_ROOT, '.claude', 'agents', `${agentName}.md`);
+  if (!existsSync(agentPath)) return runClaude(prompt, { cwd: PROJECT_ROOT, dryRun: false });
+  const command = `claude --permission-mode bypassPermissions --print --agent ${JSON.stringify(agentName)} ${JSON.stringify(prompt)}`;
+  return execSync(command, {
+    cwd: PROJECT_ROOT,
+    encoding: 'utf-8',
+    timeout: 600000,
+    maxBuffer: 10 * 1024 * 1024,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+}
+
 function runAgent(agent, prompt, roleName = '') {
   if (DRY_RUN) return dryRunOutput(roleName);
-  if (agent === 'claude') return runClaude(prompt, { cwd: PROJECT_ROOT, dryRun: false });
+  if (agent === 'claude') return runClaudeRole(roleName, prompt);
   if (agent === 'codex') return runCodex(prompt, { cwd: PROJECT_ROOT, dryRun: false });
   if (agent === 'gemini') return runGemini(prompt, { cwd: PROJECT_ROOT, dryRun: false });
   throw new Error(`Unknown agent engine: ${agent}`);
