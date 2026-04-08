@@ -54,6 +54,19 @@
     "escalation_graph_completeness": [
       "escalation graph is documented",
       "optimizer target classes are defined"
+    ],
+    "memory_persistence": [
+      "session persistence surfaces exist",
+      "checkpoints log capability exists"
+    ],
+    "eval_coverage": [
+      "feature schema includes acceptance/regression checks"
+    ],
+    "security_guardrails": [
+      "immutable surfaces and guarded runtime paths exist"
+    ],
+    "cost_efficiency": [
+      "adapter surfaces reduce unnecessary broad context"
     ]
   },
   "scoring": {
