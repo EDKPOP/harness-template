@@ -6,7 +6,8 @@ import { parseArgs } from 'util';
 import { execSync } from 'child_process';
 import { loadJson, saveJson, normalizeFailureSignature, updateFailureTracking, markProgress } from './state.mjs';
 import { appendCheckpoint } from './checkpoints.mjs';
-import { recommendIntervention, summarizeStatus } from './status.mjs';
+import { recommendIntervention, summarizeStatus, autoAdvanceEnabled } from './status.mjs';
+import { requiresApproval } from './approval-gates.mjs';
 import { appendNotification, writeLatestNotification, buildPhaseEvent, buildNotifierCommand } from './notifications.mjs';
 import { loadQualityGates, runQualityGates } from './gates.mjs';
 import { loadAuditSpec, runAudit } from './audit.mjs';
@@ -324,16 +325,37 @@ async function main() {
   saveState(nextState);
 
   const plan = runPlanning(config, timestamp, discovery);
-  const planEvent = buildPhaseEvent('plan', 'completed', 'Planning completed', { verdict: extractVerdict(plan) });
+  const approval = requiresApproval(loadState(), 'plan');
+  const planEvent = buildPhaseEvent('plan', approval.required ? 'awaiting_approval' : 'completed', approval.required ? `Planning completed, waiting for ${approval.gate}` : 'Planning completed', { verdict: extractVerdict(plan), approvalGate: approval.gate || '' });
   appendNotification(HARNESS_DIR, planEvent);
   writeLatestNotification(HARNESS_DIR, planEvent);
   try { execSync(buildNotifierCommand(HARNESS_DIR, planEvent.phase, planEvent.status, planEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
   debug(`plan verdict=${extractVerdict(plan)}`);
   nextState = loadState();
-  nextState = markProgress({ ...nextState, phase: 'implement', activeRole: 'implementer' }, 'plan complete');
+  nextState = markProgress({ ...nextState, phase: 'plan', activeRole: 'planner' }, approval.required ? `plan waiting for ${approval.gate}` : 'plan complete');
   nextState.lastSuccessfulCheckpoint = 'plan';
-  nextState.recommendedIntervention = recommendIntervention(nextState);
-  appendCheckpoint(HARNESS_DIR, { timestamp: new Date().toISOString(), phase: 'plan', activeFeature: '', summary: 'plan complete', verdict: 'PASS' });
+  nextState.recommendedIntervention = approval.required ? `await ${approval.gate}` : recommendIntervention(nextState);
+  appendCheckpoint(HARNESS_DIR, { timestamp: new Date().toISOString(), phase: 'plan', activeFeature: '', summary: approval.required ? `plan waiting for ${approval.gate}` : 'plan complete', verdict: approval.required ? 'AWAITING_APPROVAL' : 'PASS' });
+  saveState(nextState);
+
+  if (approval.required || !autoAdvanceEnabled(config)) {
+    const finalState = loadState();
+    finalState.status = 'paused';
+    finalState.stopCondition = approval.gate || 'auto-advance-disabled';
+    finalState.summary = approval.required ? `paused for ${approval.gate}` : 'paused because auto advance is disabled';
+    finalState.recommendedIntervention = approval.required ? `await ${approval.gate}` : 'continue';
+    saveState(finalState);
+    const finalStatus = summarizeStatus(finalState);
+    writeArtifact('status', getTimestamp(), JSON.stringify(finalStatus, null, 2));
+    const finalEvent = buildPhaseEvent('final', 'paused', finalState.summary, finalStatus);
+    appendNotification(HARNESS_DIR, finalEvent);
+    writeLatestNotification(HARNESS_DIR, finalEvent);
+    try { execSync(buildNotifierCommand(HARNESS_DIR, finalEvent.phase, finalEvent.status, finalEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+    success(finalState.summary);
+    process.exit(0);
+  }
+
+  nextState = markProgress({ ...loadState(), phase: 'implement', activeRole: 'implementer' }, 'moving to implement');
   saveState(nextState);
 
   let reviewOutput = null;

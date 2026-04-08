@@ -70,6 +70,14 @@ pipeline:
 
   scale: project
 
+  auto_advance: true
+
+  approval_gates:
+    - plan-approved
+    - destructive-migration
+    - public-deploy
+    - cli-fallback
+
   role_routing:
     adopt_requires:
       - explorer

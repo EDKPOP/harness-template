@@ -20,3 +20,8 @@ export function summarizeStatus(state) {
     recommendedIntervention: state.recommendedIntervention || recommendIntervention(state),
   };
 }
+
+
+export function autoAdvanceEnabled(config) {
+  return Boolean(config?.pipeline?.auto_advance);
+}
