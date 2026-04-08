@@ -183,6 +183,19 @@ function maybeRunOptimizer(config, timestamp, reviewOutput) {
   return output;
 }
 
+function shouldInvokeCouncil(config, state, reviewOutput = '') {
+  const summary = String(reviewOutput || '').toLowerCase() + ' ' + String(state.summary || '').toLowerCase();
+  return summary.includes('ambiguous') || summary.includes('unclear scope') || summary.includes('route decision');
+}
+
+function maybeRunCouncil(config, timestamp, state, reviewOutput = '') {
+  const target = { role_file: '.harness/roles/council.md', engine: config.agents?.architect?.engine || 'gemini' };
+  const prompt = buildPrompt(target.role_file.split('/').pop(), { review: reviewOutput, learnings: readFile(join(HARNESS_DIR, 'learnings.md')) });
+  const output = runAgent(target.engine, prompt);
+  writeArtifact('council', timestamp, output);
+  return output;
+}
+
 function maybeRunAnalyzer(config, timestamp, kind, reviewOutput, gateOutput) {
   const mapping = {
     silent: config.agents?.silent_failure_hunter,
@@ -310,6 +323,10 @@ async function main() {
     const signature = normalizeFailureSignature(reviewOutput);
     loopState = updateFailureTracking(loadState(), signature);
     saveState(loopState);
+
+    if (shouldInvokeCouncil(config, loopState, reviewOutput)) {
+      maybeRunCouncil(config, getTimestamp(), loopState, reviewOutput);
+    }
 
     if ((loopState.sameFailureCount || 0) >= (config.pipeline?.loop?.max_same_failure || 2)) {
       maybeRunOptimizer(config, getTimestamp(), reviewOutput);

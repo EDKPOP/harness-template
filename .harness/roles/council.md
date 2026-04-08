@@ -13,3 +13,9 @@
 - adopt vs migrate 경계가 애매할 때
 - hotfix vs full pipeline 판단
 - role selection이나 구조 선택이 불확실할 때
+
+## Mandatory decision classes
+- adopt vs migrate ambiguity
+- hotfix vs full pipeline ambiguity
+- scope ambiguity that changes role composition
+- conflicting architectural tradeoffs with similar cost

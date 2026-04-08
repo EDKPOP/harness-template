@@ -8,7 +8,9 @@
     "learning_escalation",
     "adapter_integrity",
     "role_routing_completeness",
-    "context_routing_discipline"
+    "context_routing_discipline",
+    "role_composition_readiness",
+    "escalation_graph_completeness"
   ],
   "checks": {
     "tool_coverage": [
@@ -44,6 +46,14 @@
     "context_routing_discipline": [
       "context routing guidance exists in docs",
       "role prompts do not assume full-context injection"
+    ],
+    "role_composition_readiness": [
+      "role composition rules are documented",
+      "mandatory compositions are defined for bootstrap, adopt, migrate, resume"
+    ],
+    "escalation_graph_completeness": [
+      "escalation graph is documented",
+      "optimizer target classes are defined"
     ]
   }
 }

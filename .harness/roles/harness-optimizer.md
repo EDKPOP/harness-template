@@ -17,3 +17,9 @@
 - AGENTS-level rule proposals
 - quality gate strengthening proposals
 - adapter or role prompt changes
+
+## Promotion policy
+- one-off issue -> learnings only
+- repeated issue without clear prevention -> pattern
+- repeated issue with mechanical prevention path -> gate proposal
+- repeated issue with behavioral guidance fix -> role prompt or AGENTS proposal
