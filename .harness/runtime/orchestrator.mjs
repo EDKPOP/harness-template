@@ -301,13 +301,14 @@ async function main() {
 
   let reviewOutput = null;
   let gateOutput = null;
-  let verdict = 'FAIL';
+  let verdict = DRY_RUN ? 'WARNING_ONLY' : 'FAIL';
 
   while ((loadState().iteration || 0) < (config.pipeline?.loop?.max_iterations || 3)) {
     let loopState = loadState();
     loopState.iteration = (loopState.iteration || 0) + 1;
     loopState.phase = 'implement';
     loopState.activeRole = 'implementer';
+    debug(`loop iteration=${loopState.iteration}`);
     saveState(loopState);
 
     const implOutput = runImplementation(config, getTimestamp(), plan, reviewOutput, gateOutput);
@@ -394,13 +395,14 @@ async function main() {
   }
 
   const finalState = loadState();
-  finalState.status = verdict === 'PASS' || verdict === 'WARNING_ONLY' ? 'completed' : 'failed';
+  const effectiveVerdict = verdict || (DRY_RUN ? 'WARNING_ONLY' : 'FAIL');
+  finalState.status = effectiveVerdict === 'PASS' || effectiveVerdict === 'WARNING_ONLY' ? 'completed' : 'failed';
   finalState.phase = '';
   finalState.activeRole = '';
-  finalState.summary = `pipeline finished with ${verdict}`;
+  finalState.summary = `pipeline finished with ${effectiveVerdict}`;
   saveState(finalState);
 
-  debug(`final verdict=${verdict}`);
+  debug(`final verdict=${effectiveVerdict}`);
   debug(`final status=${finalState.status}`);
   if (finalState.status === 'completed') success(finalState.summary);
   else fail(finalState.summary);
