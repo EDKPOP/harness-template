@@ -274,6 +274,7 @@ async function main() {
   const auditSpec = loadAuditSpec(join(HARNESS_DIR, 'audit-spec.json'));
   const auditResult = runAudit({ spec: auditSpec, projectRoot: PROJECT_ROOT, harnessDir: HARNESS_DIR });
   writeArtifact('audit', timestamp, JSON.stringify(auditResult, null, 2));
+  debug(`audit verdict=${auditResult.verdict}`);
   if (auditResult.verdict !== 'PASS') {
     state.status = 'failed';
     state.stopCondition = 'audit-failed';
@@ -293,6 +294,7 @@ async function main() {
   saveState(nextState);
 
   const plan = runPlanning(config, timestamp, discovery);
+  debug(`plan verdict=${extractVerdict(plan)}`);
   nextState = loadState();
   nextState = markProgress({ ...nextState, phase: 'implement', activeRole: 'implementer' }, 'plan complete');
   saveState(nextState);
@@ -308,7 +310,8 @@ async function main() {
     loopState.activeRole = 'implementer';
     saveState(loopState);
 
-    runImplementation(config, getTimestamp(), plan, reviewOutput, gateOutput);
+    const implOutput = runImplementation(config, getTimestamp(), plan, reviewOutput, gateOutput);
+    debug(`impl verdict=${extractVerdict(implOutput)}`);
 
     loopState = loadState();
     loopState.phase = 'gate';
@@ -317,6 +320,7 @@ async function main() {
 
     const gates = loadQualityGates(join(HARNESS_DIR, 'quality-gates.json'));
     const gateResult = runQualityGates({ gates, cwd: PROJECT_ROOT, dryRun: DRY_RUN });
+    debug(`gate verdict=${gateResult.verdict}`);
     const routing = config.pipeline?.role_routing || {};
     gateOutput = JSON.stringify(gateResult, null, 2);
     writeArtifact('gate', getTimestamp(), gateOutput);
@@ -350,6 +354,7 @@ async function main() {
     saveState(loopState);
 
     reviewOutput = runReview(config, getTimestamp(), plan, gateOutput);
+    debug(`review raw=${JSON.stringify(reviewOutput)}`);
     verdict = extractVerdict(reviewOutput);
     loopState.lastReviewResult = verdict;
     loopState.summary = `review verdict: ${verdict}`;
@@ -395,6 +400,8 @@ async function main() {
   finalState.summary = `pipeline finished with ${verdict}`;
   saveState(finalState);
 
+  debug(`final verdict=${verdict}`);
+  debug(`final status=${finalState.status}`);
   if (finalState.status === 'completed') success(finalState.summary);
   else fail(finalState.summary);
 }
