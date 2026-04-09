@@ -154,26 +154,26 @@ function runClaudeRole(roleName, prompt) {
   return runClaude(prompt, { cwd: PROJECT_ROOT, dryRun: false });
 }
 
-function runAgent(agent, prompt, roleName = '') {
+async function runAgent(agent, prompt, roleName = '') {
   if (DRY_RUN) return dryRunOutput(roleName);
-  if (agent === 'claude') return runClaudeRole(roleName, prompt);
+  if (agent === 'claude') return runClaude(prompt, { cwd: PROJECT_ROOT, dryRun: false });
   if (agent === 'codex') return runCodex(prompt, { cwd: PROJECT_ROOT, dryRun: false });
   if (agent === 'gemini') return runGemini(prompt, { cwd: PROJECT_ROOT, dryRun: false });
   throw new Error(`Unknown agent engine: ${agent}`);
 }
 
-function runDiscovery(config, timestamp) {
+async function runDiscovery(config, timestamp) {
   const roleFile = config.agents?.explorer?.role_file || '.harness/roles/code-explorer.md';
   const engine = config.agents?.explorer?.engine || 'claude';
   const prompt = buildPrompt(roleFile.split('/').pop());
   const roleName = roleFile.split('/').pop();
   const forceDryRun = Boolean(config.agents?.explorer?.force_dry_run);
-  const output = forceDryRun ? dryRunOutput(roleName) : withFallback(engine, 'claude', (selected) => runAgent(selected, prompt, roleName), (_error, fb) => sendHeartbeat('discover', `fallback to ${fb}`));
+  const output = forceDryRun ? dryRunOutput(roleName) : await withFallback(engine, 'claude', (selected) => runAgent(selected, prompt, roleName), (_error, fb) => sendHeartbeat('discover', `fallback to ${fb}`));
   writeArtifact('discover', timestamp, output);
   return output;
 }
 
-function runPlanning(config, timestamp, discovery) {
+async function runPlanning(config, timestamp, discovery) {
   const roleFile = config.agents?.planner?.role_file || '.harness/roles/planner.md';
   const engine = config.agents?.planner?.engine || 'claude';
   const prompt = buildPrompt(roleFile.split('/').pop(), { discovery });
@@ -184,18 +184,18 @@ function runPlanning(config, timestamp, discovery) {
   return output;
 }
 
-function runImplementation(config, timestamp, plan, review = null, gate = null) {
+async function runImplementation(config, timestamp, plan, review = null, gate = null) {
   const roleFile = config.agents?.implementer?.role_file || '.harness/roles/implementer.md';
   const engine = config.agents?.implementer?.engine || 'claude';
   const learnings = readFile(join(HARNESS_DIR, 'learnings.md'));
   const prompt = buildPrompt(roleFile.split('/').pop(), { plan, review, gate, learnings });
   const roleName = roleFile.split('/').pop();
-  const output = runAgent(engine, prompt, roleName);
+  const output = await runAgent(engine, prompt, roleName);
   writeArtifact('impl', timestamp, output);
   return output;
 }
 
-function runReview(config, timestamp, plan, gateOutput) {
+async function runReview(config, timestamp, plan, gateOutput) {
   const roleFile = config.agents?.reviewer?.role_file || '.harness/roles/reviewer.md';
   const engine = config.agents?.reviewer?.engine || 'codex';
   let diff = '';
@@ -206,17 +206,17 @@ function runReview(config, timestamp, plan, gateOutput) {
   }
   const prompt = buildPrompt(roleFile.split('/').pop(), { plan, diff, gate: gateOutput });
   const roleName = roleFile.split('/').pop();
-  const output = runAgent(engine, prompt, roleName);
+  const output = await runAgent(engine, prompt, roleName);
   writeArtifact('review', timestamp, output);
   return output;
 }
 
-function maybeRunOptimizer(config, timestamp, reviewOutput) {
+async function maybeRunOptimizer(config, timestamp, reviewOutput) {
   const roleFile = config.agents?.harness_optimizer?.role_file || '.harness/roles/harness-optimizer.md';
   const engine = config.agents?.harness_optimizer?.engine || 'claude';
   const prompt = buildPrompt(roleFile.split('/').pop(), { review: reviewOutput, learnings: readFile(join(HARNESS_DIR, 'learnings.md')) });
   const roleName = roleFile.split('/').pop();
-  const output = runAgent(engine, prompt, roleName);
+  const output = await runAgent(engine, prompt, roleName);
   writeArtifact('optimize', timestamp, output);
   return output;
 }
@@ -226,16 +226,16 @@ function shouldInvokeCouncil(config, state, reviewOutput = '') {
   return summary.includes('ambiguous') || summary.includes('unclear scope') || summary.includes('route decision');
 }
 
-function maybeRunCouncil(config, timestamp, state, reviewOutput = '') {
+async function maybeRunCouncil(config, timestamp, state, reviewOutput = '') {
   const target = { role_file: '.harness/roles/council.md', engine: config.agents?.architect?.engine || 'gemini' };
   const prompt = buildPrompt(target.role_file.split('/').pop(), { review: reviewOutput, learnings: readFile(join(HARNESS_DIR, 'learnings.md')) });
   const roleName = target.role_file.split('/').pop();
-  const output = runAgent(target.engine, prompt, roleName);
+  const output = await runAgent(target.engine, prompt, roleName);
   writeArtifact('council', timestamp, output);
   return output;
 }
 
-function maybeRunAnalyzer(config, timestamp, kind, reviewOutput, gateOutput) {
+async function maybeRunAnalyzer(config, timestamp, kind, reviewOutput, gateOutput) {
   const mapping = {
     silent: config.agents?.silent_failure_hunter,
     test: config.agents?.pr_test_analyzer,
@@ -244,7 +244,7 @@ function maybeRunAnalyzer(config, timestamp, kind, reviewOutput, gateOutput) {
   if (!target?.role_file || !target?.engine) return null;
   const prompt = buildPrompt(target.role_file.split('/').pop(), { review: reviewOutput, gate: gateOutput, plan: readFile(join(ARTIFACTS_DIR, 'plan-latest.md')), learnings: readFile(join(HARNESS_DIR, 'learnings.md')) });
   const roleName = target.role_file.split('/').pop();
-  const output = runAgent(target.engine, prompt, roleName);
+  const output = await runAgent(target.engine, prompt, roleName);
   writeArtifact(kind === 'silent' ? 'silent-failure' : 'test-analysis', timestamp, output);
   return output;
 }
@@ -292,13 +292,13 @@ function sendHeartbeat(phase, summary) {
   sendPhase(HARNESS_DIR, phase, 'heartbeat', summary);
 }
 
-function withFallback(primary, fallback, work, onFallback) {
+async function withFallback(primary, fallback, work, onFallback) {
   try {
-    return work(primary);
+    return await work(primary);
   } catch (error) {
     if (!fallback || fallback === primary) throw error;
     onFallback?.(error, fallback);
-    return work(fallback);
+    return await work(fallback);
   }
 }
 
@@ -350,7 +350,7 @@ async function main() {
   const mode = loadState().mode || config.project?.mode || '';
   const rawMode = String(mode || '').toLowerCase();
   const mustDiscover = !['resume', 'resumed'].includes(rawMode);
-  const discovery = mustDiscover ? runDiscovery(config, timestamp) : '';
+  const discovery = mustDiscover ? await runDiscovery(config, timestamp) : '';
   sendPhase(HARNESS_DIR, 'discover', 'completed', 'discovery completed');
   let nextState = loadState();
   nextState = markProgress({ ...nextState, phase: 'plan', activeRole: 'planner' }, 'discovery complete');
@@ -358,7 +358,7 @@ async function main() {
   sendPhase(HARNESS_DIR, 'plan', 'started', 'starting planning');
   sendHeartbeat('plan', 'planning running');
 
-  const plan = runPlanning(config, timestamp, discovery);
+  const plan = await runPlanning(config, timestamp, discovery);
   sendPhase(HARNESS_DIR, 'plan', 'completed', 'Planning completed');
   debug(`plan verdict=${extractVerdict(plan)}`);
   nextState = loadState();
@@ -400,7 +400,7 @@ async function main() {
     debug(`loop iteration=${loopState.iteration}`);
     saveState(loopState);
 
-    const implOutput = runImplementation(config, getTimestamp(), plan, reviewOutput, gateOutput);
+    const implOutput = await runImplementation(config, getTimestamp(), plan, reviewOutput, gateOutput);
     const implEvent = buildPhaseEvent('implement', 'completed', 'Implementation step finished', { iteration: loopState.iteration, verdict: extractVerdict(implOutput) });
     appendNotification(HARNESS_DIR, implEvent);
     writeLatestNotification(HARNESS_DIR, implEvent);
@@ -438,7 +438,7 @@ async function main() {
       loopState.summary = 'quality gate failed';
       if ((loopState.sameFailureCount || 0) >= (config.pipeline?.loop?.max_same_failure || 2)) {
         appendLearningRecord('gate-fail', 'repeated gate failure', gateOutput);
-      maybeRunOptimizer(config, getTimestamp(), gateOutput);
+      await maybeRunOptimizer(config, getTimestamp(), gateOutput);
         loopState.status = 'failed';
         loopState.stopCondition = 'same-gate-failure';
         saveState(loopState);
@@ -453,7 +453,7 @@ async function main() {
     loopState.activeRole = 'reviewer';
     saveState(loopState);
 
-    reviewOutput = runReview(config, getTimestamp(), plan, gateOutput);
+    reviewOutput = await runReview(config, getTimestamp(), plan, gateOutput);
     const reviewEvent = buildPhaseEvent('review', 'completed', 'Review finished', { verdict: extractVerdict(reviewOutput) });
     appendNotification(HARNESS_DIR, reviewEvent);
     writeLatestNotification(HARNESS_DIR, reviewEvent);
@@ -473,13 +473,13 @@ async function main() {
     const reviewLower = String(reviewOutput || '').toLowerCase();
     const escalateSignal = extractMachineSignal(reviewOutput, 'escalate').toLowerCase();
     if (routing.hidden_failure_requires && (escalateSignal === 'silent_failure_hunter' || reviewLower.includes('silent failure') || reviewLower.includes('swallowed') || reviewLower.includes('fake success'))) {
-      maybeRunAnalyzer(config, getTimestamp(), 'silent', reviewOutput, gateOutput);
+      await maybeRunAnalyzer(config, getTimestamp(), 'silent', reviewOutput, gateOutput);
     }
     if (routing.weak_test_signal_requires && (escalateSignal === 'pr_test_analyzer' || reviewLower.includes('test coverage') || reviewLower.includes('regression coverage') || reviewLower.includes('misleading test'))) {
-      maybeRunAnalyzer(config, getTimestamp(), 'test', reviewOutput, gateOutput);
+      await maybeRunAnalyzer(config, getTimestamp(), 'test', reviewOutput, gateOutput);
     }
     if (escalateSignal === 'council') {
-      maybeRunCouncil(config, getTimestamp(), loopState, reviewOutput);
+      await maybeRunCouncil(config, getTimestamp(), loopState, reviewOutput);
     }
 
     if (verdict === 'PASS' || verdict === 'WARNING_ONLY') break;
@@ -489,12 +489,12 @@ async function main() {
     saveState(loopState);
 
     if (shouldInvokeCouncil(config, loopState, reviewOutput)) {
-      maybeRunCouncil(config, getTimestamp(), loopState, reviewOutput);
+      await maybeRunCouncil(config, getTimestamp(), loopState, reviewOutput);
     }
 
     if ((loopState.sameFailureCount || 0) >= (config.pipeline?.loop?.max_same_failure || 2)) {
       promotePatternOrInstinct(reviewOutput, loopState.sameFailureCount || 0);
-      maybeRunOptimizer(config, getTimestamp(), reviewOutput);
+      await maybeRunOptimizer(config, getTimestamp(), reviewOutput);
       loopState.status = 'failed';
       loopState.stopCondition = 'same-review-failure';
       saveState(loopState);
