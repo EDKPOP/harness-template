@@ -1,26 +1,26 @@
 import { execFileSync } from 'child_process';
+import { mkdirSync, existsSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
-// Claude CLI blocks when stdin prompt starts with markdown headers (# ).
-// Workaround: prepend a plain-text instruction before the role spec.
-function sanitizePrompt(prompt) {
-  const lines = prompt.split('\n');
-  const firstLine = lines[0] || '';
-  if (firstLine.startsWith('#')) {
-    return 'Please perform the following role:\n\n' + prompt;
-  }
-  return prompt;
+// Claude CLI tool-use permission prompts block when run inside a project directory
+// that contains CLAUDE.md. Run from a neutral sandbox directory instead.
+function getSandboxDir() {
+  const dir = join(tmpdir(), 'harness-claude-sandbox');
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
-export function runClaude(prompt, { cwd, dryRun = false }) {
+export function runClaude(prompt, { cwd: _cwd, dryRun = false }) {
   if (dryRun) return "[DRY RUN] claude";
-  const safe = sanitizePrompt(prompt);
+  const sandboxDir = getSandboxDir();
   return execFileSync('claude', [
     '--permission-mode', 'bypassPermissions',
     '--print',
     '--no-session-persistence',
-    safe,
+    prompt,
   ], {
-    cwd,
+    cwd: sandboxDir,
     encoding: 'utf-8',
     timeout: 600000,
     maxBuffer: 20 * 1024 * 1024,
