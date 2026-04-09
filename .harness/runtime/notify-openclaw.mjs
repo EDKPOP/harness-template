@@ -33,13 +33,20 @@ if (payloadPath && existsSync(payloadPath)) {
 
 const phaseNumMap = { intake: '0', audit: '0.5', discover: '1', plan: '2', implement: '3', gate: '4', review: '5', optimize: '6', final: 'done' };
 const label = phaseNumMap[phase] || phase;
-const message = `phase ${label}. ${summary}`;
+const isApprovalPause = phase === 'implement' && status === 'paused' && /plan-approved/i.test(summary);
+const message = isApprovalPause
+  ? `approval needed. plan-approved. implementation will not start until approved.`
+  : `phase ${label}. ${summary}`;
+const planBody = typeof payload?.planBody === 'string' ? payload.planBody.trim() : '';
+const enrichedMessage = isApprovalPause && planBody
+  ? `${message}\n\nplan:\n${planBody}`
+  : message;
 const envelope = {
   kind: 'vibecoding-phase-notification',
   phase,
   status,
   summary,
-  message,
+  message: enrichedMessage,
   target: { chatId: targetChatId, channel: targetChannel, surface: targetSurface },
   payload,
 };
@@ -53,7 +60,7 @@ const result = spawnSync('openclaw', [
   'message', 'send',
   '--channel', targetSurface,
   '--target', targetChatId,
-  '--message', message,
+  '--message', enrichedMessage,
 ], { encoding: 'utf-8' });
 
 if (result.status !== 0) {

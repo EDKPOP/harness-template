@@ -1,13 +1,38 @@
-import { execFileSync } from 'child_process';
+import { streamingRun } from '../streaming-runner.mjs';
 
-export function runCodex(prompt, { cwd, dryRun = false }) {
-  const args = ['exec', prompt];
-  if (dryRun) return `[DRY RUN] codex ${args.join(' ')}`;
-  return execFileSync('codex', args, {
-    cwd,
-    encoding: 'utf-8',
-    timeout: 600000,
-    maxBuffer: 10 * 1024 * 1024,
-    stdio: ['pipe', 'pipe', 'pipe'],
+/**
+ * @param {string} prompt
+ * @param {object} opts
+ * @param {string} opts.cwd
+ * @param {boolean} [opts.dryRun]
+ * @param {string} [opts.artifactPath]
+ * @param {number} [opts.timeoutMs]
+ * @param {number} [opts.inactivityMs]
+ * @param {function} [opts.onHeartbeat]
+ * @param {function} [opts.onStall]
+ */
+export async function runCodex(prompt, opts = {}) {
+  const { cwd, dryRun = false, artifactPath, timeoutMs, inactivityMs, onHeartbeat, onStall } = opts;
+  if (dryRun) return '[DRY RUN] codex';
+
+  const result = await streamingRun('codex', ['exec', prompt], {
+    cwd: cwd || process.cwd(),
+    timeoutMs: timeoutMs || 600_000,
+    inactivityMs: inactivityMs || 120_000,
+    artifactPath,
+    completionSignals: ['## Machine Signals', 'verdict:'],
+    onHeartbeat,
+    onStall,
   });
+
+  if (result.stalled) {
+    return result.stdout + `\n\n[STALL] Codex CLI stalled.\n\n## Machine Signals\nverdict: FAIL\nescalate: harness_optimizer\nreason: cli-stall-detected\n`;
+  }
+  if (result.timedOut) {
+    return result.stdout + `\n\n[TIMEOUT] Codex CLI timed out.\n\n## Machine Signals\nverdict: FAIL\nescalate: harness_optimizer\nreason: cli-timeout\n`;
+  }
+  if (result.exitCode !== 0 && !result.stdout) {
+    throw new Error(`codex exited ${result.exitCode}: ${result.stderr.slice(0, 500)}`);
+  }
+  return result.stdout;
 }

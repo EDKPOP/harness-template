@@ -121,3 +121,19 @@ learning:
   auto_extract: true
   escalate_after_repeats: 2
   instinct_after_repeats: 3
+
+# Budget and runtime limits — prevents runaway agent execution
+budget:
+  max_duration_minutes: 60
+  max_agent_calls: 20
+  agent_timeout_seconds: 600
+  inactivity_timeout_seconds: 120
+
+# Anti-stall configuration
+anti_stall:
+  # Streaming output is captured to .harness/artifacts/*-stream-*.log in real-time
+  streaming_capture: true
+  # Heartbeat interval during agent execution (seconds)
+  heartbeat_interval_seconds: 30
+  # Protected config files that agents must not modify
+  config_protection: true

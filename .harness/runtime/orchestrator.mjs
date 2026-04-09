@@ -33,6 +33,17 @@ const TEMPLATE_PATH = flags.template || (positionals.length > 0 ? positionals[0]
 const DRY_RUN = flags['dry-run'] || false;
 const VERBOSE = flags.verbose || false;
 
+// Read-only tools for discovery/planning phases (ECC pattern: --allowedTools restriction)
+const READ_ONLY_TOOLS = ['Read', 'Grep', 'Glob', 'Bash'];
+// Protected config files that agents must not modify (ECC pattern: config-protection)
+const PROTECTED_CONFIGS = [
+  '.eslintrc', '.eslintrc.js', '.eslintrc.json', '.eslintrc.yml',
+  '.prettierrc', '.prettierrc.js', '.prettierrc.json', '.prettierrc.yml',
+  'tsconfig.json', 'jest.config.js', 'jest.config.ts', 'vitest.config.ts',
+  '.harness/config.yaml', '.harness/quality-gates.json',
+  'AGENTS.md', 'GEMINI.md', '.claude/CLAUDE.md',
+];
+
 function log(msg) { console.log(`[harness] ${msg}`); }
 function debug(msg) { if (VERBOSE) console.log(`[debug] ${msg}`); }
 function fail(msg) { console.error(`[fail] ${msg}`); }
@@ -75,7 +86,7 @@ function parseYaml(text) {
 
 
 function extractMachineSignal(text, key) {
-  const re = new RegExp(`${key}:\s*([^\n]+)`, 'i');
+  const re = new RegExp(`${key}:\\s*([^\\n]+)`, 'i');
   const m = String(text || '').match(re);
   return m ? m[1].trim() : '';
 }
@@ -125,6 +136,7 @@ function loadState() {
     taskId: '', status: 'idle', mode: '', phase: '', activeRole: '', activeFeature: '', iteration: 0, maxIterations: 3,
     lastGateResult: 'PENDING', lastReviewResult: 'PENDING', lastFailureSignature: '', sameFailureCount: 0,
     lastProgressAt: '', progressDelta: 0, stopCondition: '', blockers: [], agentSessions: {}, summary: '초기 상태',
+    budgetUsed: { durationMs: 0, agentCalls: 0 },
   });
 }
 
@@ -162,53 +174,134 @@ function buildPrompt(roleFile, extras = {}) {
   return parts.join('\n\n');
 }
 
-function runClaudeRole(roleName, prompt) {
-  const agentName = String(roleName || '').replace('.md', '');
-  return runClaude(prompt, { cwd: PROJECT_ROOT, dryRun: false });
+// --- Budget tracking ---
+
+function loadBudgetConfig(config) {
+  return {
+    maxDurationMs: (config.budget?.max_duration_minutes || 60) * 60_000,
+    maxAgentCalls: config.budget?.max_agent_calls || 20,
+    agentTimeoutMs: (config.budget?.agent_timeout_seconds || 600) * 1000,
+    inactivityMs: (config.budget?.inactivity_timeout_seconds || 120) * 1000,
+  };
 }
 
-async function runAgent(agent, prompt, roleName = '') {
+function trackAgentCall(state, durationMs) {
+  const budget = state.budgetUsed || { durationMs: 0, agentCalls: 0 };
+  budget.durationMs += durationMs;
+  budget.agentCalls += 1;
+  state.budgetUsed = budget;
+  return state;
+}
+
+function isBudgetExhausted(state, budgetConfig) {
+  const budget = state.budgetUsed || { durationMs: 0, agentCalls: 0 };
+  if (budget.durationMs >= budgetConfig.maxDurationMs) return `total duration ${Math.round(budget.durationMs / 60000)}m exceeds ${Math.round(budgetConfig.maxDurationMs / 60000)}m limit`;
+  if (budget.agentCalls >= budgetConfig.maxAgentCalls) return `${budget.agentCalls} agent calls reached ${budgetConfig.maxAgentCalls} limit`;
+  return null;
+}
+
+// --- Config protection ---
+
+function checkConfigProtection(cwd) {
+  try {
+    const diff = execSync('git diff --name-only', { cwd, encoding: 'utf-8' });
+    const staged = execSync('git diff --cached --name-only', { cwd, encoding: 'utf-8' });
+    const changed = (diff + '\n' + staged).split('\n').map(f => f.trim()).filter(Boolean);
+    const violations = changed.filter(f => PROTECTED_CONFIGS.some(p => f === p || f.endsWith('/' + p)));
+    return violations;
+  } catch {
+    return [];
+  }
+}
+
+// --- No-progress timeout enforcement ---
+
+function isNoProgressTimeout(state, config) {
+  const timeoutMin = config.pipeline?.loop?.no_progress_timeout_minutes || 15;
+  if (!state.lastProgressAt) return false;
+  const elapsed = Date.now() - new Date(state.lastProgressAt).getTime();
+  return elapsed > timeoutMin * 60_000;
+}
+
+// --- Agent execution with streaming ---
+
+async function runAgent(agent, prompt, roleName = '', opts = {}) {
   if (DRY_RUN) return dryRunOutput(roleName);
-  if (agent === 'claude') return runClaude(prompt, { cwd: PROJECT_ROOT, dryRun: false });
-  if (agent === 'codex') return runCodex(prompt, { cwd: PROJECT_ROOT, dryRun: false });
-  if (agent === 'gemini') return runGemini(prompt, { cwd: PROJECT_ROOT, dryRun: false });
+  const callOpts = {
+    cwd: opts.cwd || PROJECT_ROOT,
+    dryRun: false,
+    artifactPath: opts.artifactPath || null,
+    timeoutMs: opts.timeoutMs || 600_000,
+    inactivityMs: opts.inactivityMs || 120_000,
+    onHeartbeat: (info) => {
+      debug(`[heartbeat] ${agent}/${roleName}: ${Math.round(info.elapsed / 1000)}s elapsed, ${info.outputBytes} bytes, idle ${Math.round(info.lastOutputAge / 1000)}s`);
+      sendHeartbeat(roleName.replace('.md', ''), `running ${Math.round(info.elapsed / 1000)}s, ${info.outputBytes} bytes output`);
+    },
+    onStall: (info) => {
+      warn(`[stall] ${agent}/${roleName}: no output for ${Math.round(info.lastOutputAge / 1000)}s`);
+      sendPhase(HARNESS_DIR, roleName.replace('.md', ''), 'stalled', `CLI stall detected: no output for ${Math.round(info.lastOutputAge / 1000)}s`);
+    },
+  };
+
+  // Pass --allowedTools for read-only roles (ECC pattern)
+  if (opts.allowedTools && agent === 'claude') {
+    callOpts.allowedTools = opts.allowedTools;
+  }
+
+  if (agent === 'claude') return runClaude(prompt, callOpts);
+  if (agent === 'codex') return runCodex(prompt, callOpts);
+  if (agent === 'gemini') return runGemini(prompt, callOpts);
   throw new Error(`Unknown agent engine: ${agent}`);
 }
 
-async function runDiscovery(config, timestamp) {
+async function runDiscovery(config, timestamp, budgetConfig) {
   const roleFile = config.agents?.explorer?.role_file || '.harness/roles/code-explorer.md';
   const engine = config.agents?.explorer?.engine || 'claude';
   const prompt = buildPrompt(roleFile.split('/').pop());
   const roleName = roleFile.split('/').pop();
   const forceDryRun = Boolean(config.agents?.explorer?.force_dry_run);
-  const output = forceDryRun ? dryRunOutput(roleName) : await withFallback(engine, 'claude', (selected) => runAgent(selected, prompt, roleName), (_error, fb) => sendHeartbeat('discover', `fallback to ${fb}`));
+  const output = forceDryRun ? dryRunOutput(roleName) : await withFallback(engine, 'claude', (selected) => runAgent(selected, prompt, roleName, {
+    artifactPath: join(ARTIFACTS_DIR, `discover-stream-${timestamp}.log`),
+    timeoutMs: budgetConfig.agentTimeoutMs,
+    inactivityMs: budgetConfig.inactivityMs,
+    allowedTools: READ_ONLY_TOOLS,
+  }), (_error, fb) => sendHeartbeat('discover', `fallback to ${fb}`));
   writeArtifact('discover', timestamp, output);
   return output;
 }
 
-async function runPlanning(config, timestamp, discovery) {
+async function runPlanning(config, timestamp, discovery, budgetConfig) {
   const roleFile = config.agents?.planner?.role_file || '.harness/roles/planner.md';
   const engine = config.agents?.planner?.engine || 'claude';
   const prompt = buildPrompt(roleFile.split('/').pop(), { discovery });
   const roleName = roleFile.split('/').pop();
   const forceDryRun = Boolean(config.agents?.planner?.force_dry_run);
-  const output = forceDryRun ? dryRunOutput(roleName) : await withFallback(engine, 'claude', (selected) => runAgent(selected, prompt, roleName), (_error, fb) => sendHeartbeat('plan', `fallback to ${fb}`));
+  const output = forceDryRun ? dryRunOutput(roleName) : await withFallback(engine, 'claude', (selected) => runAgent(selected, prompt, roleName, {
+    artifactPath: join(ARTIFACTS_DIR, `plan-stream-${timestamp}.log`),
+    timeoutMs: budgetConfig.agentTimeoutMs,
+    inactivityMs: budgetConfig.inactivityMs,
+    allowedTools: READ_ONLY_TOOLS,
+  }), (_error, fb) => sendHeartbeat('plan', `fallback to ${fb}`));
   writeArtifact('plan', timestamp, output);
   return output;
 }
 
-async function runImplementation(config, timestamp, plan, review = null, gate = null) {
+async function runImplementation(config, timestamp, plan, budgetConfig, review = null, gate = null) {
   const roleFile = config.agents?.implementer?.role_file || '.harness/roles/implementer.md';
   const engine = config.agents?.implementer?.engine || 'claude';
   const learnings = readFile(join(HARNESS_DIR, 'learnings.md'));
   const prompt = buildPrompt(roleFile.split('/').pop(), { plan, review, gate, learnings });
   const roleName = roleFile.split('/').pop();
-  const output = await runAgent(engine, prompt, roleName);
+  const output = await runAgent(engine, prompt, roleName, {
+    artifactPath: join(ARTIFACTS_DIR, `impl-stream-${timestamp}.log`),
+    timeoutMs: budgetConfig.agentTimeoutMs,
+    inactivityMs: budgetConfig.inactivityMs,
+  });
   writeArtifact('impl', timestamp, output);
   return output;
 }
 
-async function runReview(config, timestamp, plan, gateOutput) {
+async function runReview(config, timestamp, plan, gateOutput, budgetConfig) {
   const roleFile = config.agents?.reviewer?.role_file || '.harness/roles/reviewer.md';
   const engine = config.agents?.reviewer?.engine || 'codex';
   let diff = '';
@@ -219,17 +312,26 @@ async function runReview(config, timestamp, plan, gateOutput) {
   }
   const prompt = buildPrompt(roleFile.split('/').pop(), { plan, diff, gate: gateOutput });
   const roleName = roleFile.split('/').pop();
-  const output = await runAgent(engine, prompt, roleName);
+  const output = await runAgent(engine, prompt, roleName, {
+    artifactPath: join(ARTIFACTS_DIR, `review-stream-${timestamp}.log`),
+    timeoutMs: budgetConfig.agentTimeoutMs,
+    inactivityMs: budgetConfig.inactivityMs,
+    allowedTools: READ_ONLY_TOOLS,
+  });
   writeArtifact('review', timestamp, output);
   return output;
 }
 
-async function maybeRunOptimizer(config, timestamp, reviewOutput) {
+async function maybeRunOptimizer(config, timestamp, reviewOutput, budgetConfig) {
   const roleFile = config.agents?.harness_optimizer?.role_file || '.harness/roles/harness-optimizer.md';
   const engine = config.agents?.harness_optimizer?.engine || 'claude';
   const prompt = buildPrompt(roleFile.split('/').pop(), { review: reviewOutput, learnings: readFile(join(HARNESS_DIR, 'learnings.md')) });
   const roleName = roleFile.split('/').pop();
-  const output = await runAgent(engine, prompt, roleName);
+  const output = await runAgent(engine, prompt, roleName, {
+    artifactPath: join(ARTIFACTS_DIR, `optimize-stream-${timestamp}.log`),
+    timeoutMs: budgetConfig.agentTimeoutMs,
+    inactivityMs: budgetConfig.inactivityMs,
+  });
   writeArtifact('optimize', timestamp, output);
   return output;
 }
@@ -239,16 +341,19 @@ function shouldInvokeCouncil(config, state, reviewOutput = '') {
   return summary.includes('ambiguous') || summary.includes('unclear scope') || summary.includes('route decision');
 }
 
-async function maybeRunCouncil(config, timestamp, state, reviewOutput = '') {
+async function maybeRunCouncil(config, timestamp, state, reviewOutput = '', budgetConfig = {}) {
   const target = { role_file: '.harness/roles/council.md', engine: config.agents?.architect?.engine || 'gemini' };
   const prompt = buildPrompt(target.role_file.split('/').pop(), { review: reviewOutput, learnings: readFile(join(HARNESS_DIR, 'learnings.md')) });
   const roleName = target.role_file.split('/').pop();
-  const output = await runAgent(target.engine, prompt, roleName);
+  const output = await runAgent(target.engine, prompt, roleName, {
+    timeoutMs: budgetConfig.agentTimeoutMs || 600_000,
+    inactivityMs: budgetConfig.inactivityMs || 120_000,
+  });
   writeArtifact('council', timestamp, output);
   return output;
 }
 
-async function maybeRunAnalyzer(config, timestamp, kind, reviewOutput, gateOutput) {
+async function maybeRunAnalyzer(config, timestamp, kind, reviewOutput, gateOutput, budgetConfig = {}) {
   const mapping = {
     silent: config.agents?.silent_failure_hunter,
     test: config.agents?.pr_test_analyzer,
@@ -257,7 +362,10 @@ async function maybeRunAnalyzer(config, timestamp, kind, reviewOutput, gateOutpu
   if (!target?.role_file || !target?.engine) return null;
   const prompt = buildPrompt(target.role_file.split('/').pop(), { review: reviewOutput, gate: gateOutput, plan: readFile(join(ARTIFACTS_DIR, 'plan-latest.md')), learnings: readFile(join(HARNESS_DIR, 'learnings.md')) });
   const roleName = target.role_file.split('/').pop();
-  const output = await runAgent(target.engine, prompt, roleName);
+  const output = await runAgent(target.engine, prompt, roleName, {
+    timeoutMs: budgetConfig.agentTimeoutMs || 600_000,
+    inactivityMs: budgetConfig.inactivityMs || 120_000,
+  });
   writeArtifact(kind === 'silent' ? 'silent-failure' : 'test-analysis', timestamp, output);
   return output;
 }
@@ -298,7 +406,7 @@ function sendPhase(harnessDir, phase, status, summary) {
   const event = buildPhaseEvent(phase, status, summary);
   appendNotification(harnessDir, event);
   writeLatestNotification(harnessDir, event);
-  try { execSync(buildNotifierCommand(harnessDir, event.phase, event.status, event.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+  try { execSync(buildNotifierCommand(harnessDir, event.phase, event.status, event.summary), { cwd: PROJECT_ROOT, stdio: 'ignore', timeout: 15000 }); } catch {}
 }
 
 function sendHeartbeat(phase, summary) {
@@ -325,15 +433,17 @@ function extractVerdict(text) {
 }
 
 async function main() {
-  log('=== Harness Pipeline Orchestrator v3 ===');
+  log('=== Harness Pipeline Orchestrator v3.1 ===');
   const config = loadConfig();
   const state = loadState();
   const timestamp = getTimestamp();
+  const budgetConfig = loadBudgetConfig(config);
 
   state.taskId = state.taskId || `vibecoding-${timestamp}`;
   state.status = 'running';
   state.phase = 'audit';
   state.maxIterations = config.pipeline?.loop?.max_iterations || 3;
+  state.budgetUsed = state.budgetUsed || { durationMs: 0, agentCalls: 0 };
   saveState(state);
   sendPhase(HARNESS_DIR, 'intake', 'completed', 'project initialized, moving to audit');
 
@@ -363,7 +473,13 @@ async function main() {
   const mode = loadState().mode || config.project?.mode || '';
   const rawMode = String(mode || '').toLowerCase();
   const mustDiscover = !['resume', 'resumed'].includes(rawMode);
-  const discovery = mustDiscover ? await runDiscovery(config, timestamp) : '';
+  const discovery = mustDiscover ? await runDiscovery(config, timestamp, budgetConfig) : '';
+
+  // Track budget after discovery
+  let currentState = loadState();
+  currentState = trackAgentCall(currentState, 0); // duration tracked inside adapter
+  saveState(currentState);
+
   sendPhase(HARNESS_DIR, 'discover', 'completed', 'discovery completed');
   let nextState = loadState();
   nextState = markProgress({ ...nextState, phase: 'plan', activeRole: 'planner' }, 'discovery complete');
@@ -371,14 +487,39 @@ async function main() {
   sendPhase(HARNESS_DIR, 'plan', 'started', 'starting planning');
   sendHeartbeat('plan', 'planning running');
 
-  const plan = await runPlanning(config, timestamp, discovery);
-  sendPhase(HARNESS_DIR, 'plan', 'completed', 'Planning completed');
-  debug(`plan verdict=${extractVerdict(plan)}`);
+  const plan = await runPlanning(config, timestamp, discovery, budgetConfig);
+  const planVerdict = extractVerdict(plan);
+  debug(`plan verdict=${planVerdict}`);
   nextState = loadState();
+  nextState = trackAgentCall(nextState, 0);
+
+  // --- Plan verdict gate: FAIL must not advance to plan-approved ---
+  if (planVerdict === 'FAIL') {
+    const reason = extractMachineSignal(plan, 'reason') || 'plan-failed';
+    sendPhase(HARNESS_DIR, 'plan', 'failed', `Planning failed: ${reason}`);
+    nextState.status = 'paused';
+    nextState.phase = 'plan';
+    nextState.activeRole = 'planner';
+    nextState.stopCondition = reason;
+    nextState.summary = `Planning failed: ${reason}`;
+    nextState.recommendedIntervention = recommendIntervention(nextState);
+    saveState(nextState);
+    const failEvent = buildPhaseEvent('plan', 'failed', nextState.summary, {
+      planVerdict,
+      planBody: String(plan || ''),
+    });
+    appendNotification(HARNESS_DIR, failEvent);
+    writeLatestNotification(HARNESS_DIR, failEvent);
+    try { execSync(buildNotifierCommand(HARNESS_DIR, failEvent.phase, failEvent.status, failEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore', timeout: 15000 }); } catch {}
+    error(nextState.summary);
+    process.exit(1);
+  }
+
+  sendPhase(HARNESS_DIR, 'plan', 'completed', 'Planning completed');
   nextState = markProgress({ ...nextState, phase: 'plan', activeRole: 'planner' }, 'plan complete');
   nextState.lastSuccessfulCheckpoint = 'plan';
   nextState.recommendedIntervention = recommendIntervention(nextState);
-  appendCheckpoint(HARNESS_DIR, { timestamp: new Date().toISOString(), phase: 'plan', activeFeature: '', summary: 'plan complete', verdict: 'PASS' });
+  appendCheckpoint(HARNESS_DIR, { timestamp: new Date().toISOString(), phase: 'plan', activeFeature: '', summary: 'plan complete', verdict: planVerdict });
   saveState(nextState);
 
   const implementApproval = requiresApproval(loadState(), 'implement');
@@ -393,7 +534,13 @@ async function main() {
     saveState(finalState);
     const finalStatus = summarizeStatus(finalState);
     writeArtifact('status', getTimestamp(), JSON.stringify(finalStatus, null, 2));
-    sendPhase(HARNESS_DIR, 'implement', 'paused', finalState.summary);
+    const approvalEvent = buildPhaseEvent('implement', 'paused', finalState.summary, {
+      approvalGate: implementApproval.gate || 'unknown',
+      planBody: String(plan || ''),
+    });
+    appendNotification(HARNESS_DIR, approvalEvent);
+    writeLatestNotification(HARNESS_DIR, approvalEvent);
+    try { execSync(buildNotifierCommand(HARNESS_DIR, approvalEvent.phase, approvalEvent.status, approvalEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore', timeout: 15000 }); } catch {}
     success(finalState.summary);
     process.exit(0);
   }
@@ -407,17 +554,57 @@ async function main() {
 
   while ((loadState().iteration || 0) < (config.pipeline?.loop?.max_iterations || 3)) {
     let loopState = loadState();
+
+    // --- Budget exhaustion check ---
+    const budgetExhausted = isBudgetExhausted(loopState, budgetConfig);
+    if (budgetExhausted) {
+      loopState.status = 'paused';
+      loopState.stopCondition = 'budget-exhausted';
+      loopState.summary = `Budget exhausted: ${budgetExhausted}`;
+      loopState.recommendedIntervention = 'stop and request human decision';
+      saveState(loopState);
+      sendPhase(HARNESS_DIR, 'implement', 'paused', loopState.summary);
+      warn(loopState.summary);
+      process.exit(0);
+    }
+
+    // --- No-progress timeout check ---
+    if (isNoProgressTimeout(loopState, config)) {
+      loopState.status = 'paused';
+      loopState.stopCondition = 'no-progress-timeout';
+      loopState.summary = `No progress for ${config.pipeline?.loop?.no_progress_timeout_minutes || 15} minutes`;
+      loopState.recommendedIntervention = 'stop and request human decision';
+      saveState(loopState);
+      sendPhase(HARNESS_DIR, 'implement', 'paused', loopState.summary);
+      warn(loopState.summary);
+      process.exit(0);
+    }
+
     loopState.iteration = (loopState.iteration || 0) + 1;
     loopState.phase = 'implement';
     loopState.activeRole = 'implementer';
     debug(`loop iteration=${loopState.iteration}`);
     saveState(loopState);
 
-    const implOutput = await runImplementation(config, getTimestamp(), plan, reviewOutput, gateOutput);
+    const implOutput = await runImplementation(config, getTimestamp(), plan, budgetConfig, reviewOutput, gateOutput);
+    loopState = trackAgentCall(loadState(), 0);
+    saveState(loopState);
+
+    // --- Config protection check (ECC pattern) ---
+    const violations = checkConfigProtection(PROJECT_ROOT);
+    if (violations.length > 0) {
+      warn(`Config protection violation: agent modified ${violations.join(', ')}. Reverting.`);
+      for (const file of violations) {
+        try { execSync(`git checkout -- "${file}"`, { cwd: PROJECT_ROOT, encoding: 'utf-8' }); } catch {}
+      }
+      appendLearningRecord('config-violation', `agent modified protected config: ${violations.join(', ')}`, implOutput);
+      sendPhase(HARNESS_DIR, 'implement', 'warning', `Protected config reverted: ${violations.join(', ')}`);
+    }
+
     const implEvent = buildPhaseEvent('implement', 'completed', 'Implementation step finished', { iteration: loopState.iteration, verdict: extractVerdict(implOutput) });
     appendNotification(HARNESS_DIR, implEvent);
     writeLatestNotification(HARNESS_DIR, implEvent);
-    try { execSync(buildNotifierCommand(HARNESS_DIR, implEvent.phase, implEvent.status, implEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+    try { execSync(buildNotifierCommand(HARNESS_DIR, implEvent.phase, implEvent.status, implEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore', timeout: 15000 }); } catch {}
     debug(`impl verdict=${extractVerdict(implOutput)}`);
 
     loopState = loadState();
@@ -434,7 +621,7 @@ async function main() {
     const gateEvent = buildPhaseEvent('gate', gateResult.verdict === 'FAIL' ? 'failed' : gateResult.verdict === 'PENDING' ? 'paused' : 'completed', `Gate ${gateResult.verdict}`, { verdict: gateResult.verdict });
     appendNotification(HARNESS_DIR, gateEvent);
     writeLatestNotification(HARNESS_DIR, gateEvent);
-    try { execSync(buildNotifierCommand(HARNESS_DIR, gateEvent.phase, gateEvent.status, gateEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+    try { execSync(buildNotifierCommand(HARNESS_DIR, gateEvent.phase, gateEvent.status, gateEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore', timeout: 15000 }); } catch {}
 
     loopState.lastGateResult = gateResult.verdict;
     if (gateResult.verdict === 'PENDING') {
@@ -451,7 +638,7 @@ async function main() {
       loopState.summary = 'quality gate failed';
       if ((loopState.sameFailureCount || 0) >= (config.pipeline?.loop?.max_same_failure || 2)) {
         appendLearningRecord('gate-fail', 'repeated gate failure', gateOutput);
-      await maybeRunOptimizer(config, getTimestamp(), gateOutput);
+        await maybeRunOptimizer(config, getTimestamp(), gateOutput, budgetConfig);
         loopState.status = 'failed';
         loopState.stopCondition = 'same-gate-failure';
         saveState(loopState);
@@ -466,11 +653,13 @@ async function main() {
     loopState.activeRole = 'reviewer';
     saveState(loopState);
 
-    reviewOutput = await runReview(config, getTimestamp(), plan, gateOutput);
+    reviewOutput = await runReview(config, getTimestamp(), plan, gateOutput, budgetConfig);
+    loopState = trackAgentCall(loadState(), 0);
+
     const reviewEvent = buildPhaseEvent('review', 'completed', 'Review finished', { verdict: extractVerdict(reviewOutput) });
     appendNotification(HARNESS_DIR, reviewEvent);
     writeLatestNotification(HARNESS_DIR, reviewEvent);
-    try { execSync(buildNotifierCommand(HARNESS_DIR, reviewEvent.phase, reviewEvent.status, reviewEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+    try { execSync(buildNotifierCommand(HARNESS_DIR, reviewEvent.phase, reviewEvent.status, reviewEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore', timeout: 15000 }); } catch {}
     debug(`review raw=${JSON.stringify(reviewOutput)}`);
     verdict = extractVerdict(reviewOutput);
     loopState.lastReviewResult = verdict;
@@ -486,13 +675,13 @@ async function main() {
     const reviewLower = String(reviewOutput || '').toLowerCase();
     const escalateSignal = extractMachineSignal(reviewOutput, 'escalate').toLowerCase();
     if (routing.hidden_failure_requires && (escalateSignal === 'silent_failure_hunter' || reviewLower.includes('silent failure') || reviewLower.includes('swallowed') || reviewLower.includes('fake success'))) {
-      await maybeRunAnalyzer(config, getTimestamp(), 'silent', reviewOutput, gateOutput);
+      await maybeRunAnalyzer(config, getTimestamp(), 'silent', reviewOutput, gateOutput, budgetConfig);
     }
     if (routing.weak_test_signal_requires && (escalateSignal === 'pr_test_analyzer' || reviewLower.includes('test coverage') || reviewLower.includes('regression coverage') || reviewLower.includes('misleading test'))) {
-      await maybeRunAnalyzer(config, getTimestamp(), 'test', reviewOutput, gateOutput);
+      await maybeRunAnalyzer(config, getTimestamp(), 'test', reviewOutput, gateOutput, budgetConfig);
     }
     if (escalateSignal === 'council') {
-      await maybeRunCouncil(config, getTimestamp(), loopState, reviewOutput);
+      await maybeRunCouncil(config, getTimestamp(), loopState, reviewOutput, budgetConfig);
     }
 
     if (verdict === 'PASS' || verdict === 'WARNING_ONLY') break;
@@ -502,12 +691,12 @@ async function main() {
     saveState(loopState);
 
     if (shouldInvokeCouncil(config, loopState, reviewOutput)) {
-      await maybeRunCouncil(config, getTimestamp(), loopState, reviewOutput);
+      await maybeRunCouncil(config, getTimestamp(), loopState, reviewOutput, budgetConfig);
     }
 
     if ((loopState.sameFailureCount || 0) >= (config.pipeline?.loop?.max_same_failure || 2)) {
       promotePatternOrInstinct(reviewOutput, loopState.sameFailureCount || 0);
-      await maybeRunOptimizer(config, getTimestamp(), reviewOutput);
+      await maybeRunOptimizer(config, getTimestamp(), reviewOutput, budgetConfig);
       loopState.status = 'failed';
       loopState.stopCondition = 'same-review-failure';
       saveState(loopState);
@@ -529,7 +718,7 @@ async function main() {
   const finalEvent = buildPhaseEvent('final', finalState.status, finalState.summary, finalStatus);
   appendNotification(HARNESS_DIR, finalEvent);
   writeLatestNotification(HARNESS_DIR, finalEvent);
-  try { execSync(buildNotifierCommand(HARNESS_DIR, finalEvent.phase, finalEvent.status, finalEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore' }); } catch {}
+  try { execSync(buildNotifierCommand(HARNESS_DIR, finalEvent.phase, finalEvent.status, finalEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore', timeout: 15000 }); } catch {}
 
   debug(`final verdict=${effectiveVerdict}`);
   debug(`final status=${finalState.status}`);
@@ -539,5 +728,16 @@ async function main() {
 
 main().catch((error) => {
   fail(error.stack || error.message);
+  try {
+    const crashState = loadState();
+    crashState.status = 'failed';
+    crashState.stopCondition = 'unhandled-error';
+    crashState.summary = `crash: ${String(error.message || error).slice(0, 200)}`;
+    crashState.recommendedIntervention = 'stop and request human decision';
+    saveState(crashState);
+    sendPhase(HARNESS_DIR, crashState.phase || 'unknown', 'failed', crashState.summary);
+  } catch (stateError) {
+    fail(`failed to persist crash state: ${stateError.message}`);
+  }
   process.exit(1);
 });
