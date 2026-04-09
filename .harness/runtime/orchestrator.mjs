@@ -192,7 +192,7 @@ async function runPlanning(config, timestamp, discovery) {
   const prompt = buildPrompt(roleFile.split('/').pop(), { discovery });
   const roleName = roleFile.split('/').pop();
   const forceDryRun = Boolean(config.agents?.planner?.force_dry_run);
-  const output = forceDryRun ? dryRunOutput(roleName) : withFallback(engine, 'claude', (selected) => runAgent(selected, prompt, roleName), (_error, fb) => sendHeartbeat('plan', `fallback to ${fb}`));
+  const output = forceDryRun ? dryRunOutput(roleName) : await withFallback(engine, 'claude', (selected) => runAgent(selected, prompt, roleName), (_error, fb) => sendHeartbeat('plan', `fallback to ${fb}`));
   writeArtifact('plan', timestamp, output);
   return output;
 }
