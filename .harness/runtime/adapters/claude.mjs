@@ -1,44 +1,15 @@
-import { spawn } from 'child_process';
-import { writeFileSync, unlinkSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { execFileSync } from 'child_process';
 
 export function runClaude(prompt, { cwd, dryRun = false }) {
-  if (dryRun) return Promise.resolve(`[DRY RUN] claude --print <prompt>`);
-
-  return new Promise((resolve, reject) => {
-    const tmpFile = join(tmpdir(), `harness-prompt-${Date.now()}.txt`);
-    try {
-      writeFileSync(tmpFile, prompt, 'utf-8');
-    } catch (e) {
-      return reject(e);
-    }
-
-    const proc = spawn('claude', [
-      '--permission-mode', 'bypassPermissions',
-      '--print',
-      prompt,
-    ], {
-      cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      detached: false,
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', (d) => { stdout += d.toString(); });
-    proc.stderr.on('data', (d) => { stderr += d.toString(); });
-
-    proc.on('close', (code) => {
-      try { unlinkSync(tmpFile); } catch {}
-      if (code !== 0) return reject(new Error(`claude exited ${code}: ${stderr.slice(0, 400)}`));
-      resolve(stdout);
-    });
-
-    proc.on('error', (err) => {
-      try { unlinkSync(tmpFile); } catch {}
-      reject(err);
-    });
+  if (dryRun) return "[DRY RUN] claude";
+  // Write prompt to file, use pipeline stdin redirect  
+  const result = execFileSync('bash', ['-c', `claude --permission-mode bypassPermissions --print "$1"`, '--', prompt], {
+    cwd,
+    encoding: 'utf-8',
+    timeout: 600000,
+    maxBuffer: 20 * 1024 * 1024,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    input: '',
   });
+  return result;
 }
