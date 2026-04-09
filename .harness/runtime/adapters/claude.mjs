@@ -3,23 +3,26 @@ import { mkdirSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-// Claude CLI triggers tool-use when prompt contains markdown headers like "## AGENTS.md"
-// or file paths. Strip markdown structure and convert to plain prose.
-function toPlainText(prompt) {
+// Claude CLI triggers tool-use when prompt contains file paths or markdown headers.
+// Sanitize prompt to plain prose before passing to claude --print.
+function sanitize(prompt) {
   return prompt
-    // Remove markdown headers (#, ##, ###) - keep the text
+    // Remove markdown headers - keep text
     .replace(/^#{1,6}\s+/gm, '')
-    // Remove inline backticks
+    // Replace file paths (starts with . or /) with placeholder
+    .replace(/(?<![`\w])\.\/[^\s)]+/g, '<path>')
+    .replace(/(?<![`\w])\.[a-zA-Z/_-]+\/[^\s)]+/g, '<path>')
+    .replace(/(?<![`\w])\/[a-zA-Z][^\s)]{2,}/g, '<path>')
+    // Remove inline backtick paths
+    .replace(/`[./][^`]+`/g, '<path>')
+    // Remove fenced code blocks
+    .replace(/```[\w]*\n[\s\S]*?```/g, '[code block omitted]')
+    // Remove inline code
     .replace(/`([^`]+)`/g, '$1')
-    // Remove fenced code blocks - keep content
-    .replace(/^```[\w]*\n?/gm, '')
-    .replace(/^```\s*$/gm, '')
-    // Remove bold/italic markers
+    // Remove bold/italic
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\*([^*]+)\*/g, '$1')
-    // Remove horizontal rules
-    .replace(/^[-*]{3,}\s*$/gm, '---')
-    // Collapse multiple blank lines
+    // Collapse blank lines
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -32,7 +35,7 @@ function getSandboxDir() {
 
 export function runClaude(prompt, { cwd: _cwd, dryRun = false }) {
   if (dryRun) return "[DRY RUN] claude";
-  const safe = toPlainText(prompt);
+  const safe = sanitize(prompt);
   const sandboxDir = getSandboxDir();
   return execFileSync('claude', [
     '--permission-mode', 'bypassPermissions',
