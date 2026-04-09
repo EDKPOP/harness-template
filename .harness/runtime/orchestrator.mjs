@@ -133,20 +133,24 @@ function saveState(state) {
 }
 
 function buildPrompt(roleFile, extras = {}) {
-  const parts = [];
+  const sysParts = [];
+  const userParts = [];
   const role = readFile(join(HARNESS_DIR, 'roles', roleFile));
-  if (role) parts.push(role);
+  if (role) sysParts.push(role);
   const agents = readFile(join(PROJECT_ROOT, 'AGENTS.md'));
-  if (agents) parts.push(`\n---\n## AGENTS.md\n${agents}`);
+  if (agents) sysParts.push(`\n---\n## AGENTS.md\n${agents}`);
+  if (extras.learnings) sysParts.push(`\n---\n## learnings\n${extras.learnings}`);
   const template = readFile(TEMPLATE_PATH);
-  if (template) parts.push(`\n---\n## task_template.md\n${template}`);
-  if (extras.plan) parts.push(`\n---\n## plan\n${extras.plan}`);
-  if (extras.review) parts.push(`\n---\n## review\n${extras.review}`);
-  if (extras.gate) parts.push(`\n---\n## gate\n${extras.gate}`);
-  if (extras.learnings) parts.push(`\n---\n## learnings\n${extras.learnings}`);
-  if (extras.diff) parts.push(`\n---\n## git diff\n\`\`\`diff\n${extras.diff}\n\`\`\``);
-  if (extras.discovery) parts.push(`\n---\n## discovery\n${extras.discovery}`);
-  return parts.join('\n');
+  if (template) userParts.push(`## task_template.md\n${template}`);
+  if (extras.plan) userParts.push(`## plan\n${extras.plan}`);
+  if (extras.review) userParts.push(`## review\n${extras.review}`);
+  if (extras.gate) userParts.push(`## gate\n${extras.gate}`);
+  if (extras.diff) userParts.push(`## git diff\n\`\`\`diff\n${extras.diff}\n\`\`\``);
+  if (extras.discovery) userParts.push(`## discovery\n${extras.discovery}`);
+  userParts.push("Please perform your role now based on the context above.");
+  const system = sysParts.join('\n');
+  const user = userParts.join('\n\n');
+  return system + '\n---USER---\n' + user;
 }
 
 function runClaudeRole(roleName, prompt) {
