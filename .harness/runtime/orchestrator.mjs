@@ -132,25 +132,34 @@ function saveState(state) {
   saveJson(join(HARNESS_DIR, 'session-state.json'), state);
 }
 
+function stripForClaude(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/```[\w\s]*\n[\s\S]*?```/g, '[code]')
+    .replace(/`[^`]+`/g, (m) => m.replace(/[./\\]/g, ''))
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function buildRoleLabel(roleFile) {
+  const name = roleFile.replace('.md','').replace('code-','').replace('-',' ');
+  return name;
+}
+
 function buildPrompt(roleFile, extras = {}) {
-  const sysParts = [];
-  const userParts = [];
-  const role = readFile(join(HARNESS_DIR, 'roles', roleFile));
-  if (role) sysParts.push(role);
-  const agents = readFile(join(PROJECT_ROOT, 'AGENTS.md'));
-  if (agents) sysParts.push(`\n---\n## AGENTS.md\n${agents}`);
-  if (extras.learnings) sysParts.push(`\n---\n## learnings\n${extras.learnings}`);
-  const template = readFile(TEMPLATE_PATH);
-  if (template) userParts.push(`## task_template.md\n${template}`);
-  if (extras.plan) userParts.push(`## plan\n${extras.plan}`);
-  if (extras.review) userParts.push(`## review\n${extras.review}`);
-  if (extras.gate) userParts.push(`## gate\n${extras.gate}`);
-  if (extras.diff) userParts.push(`## git diff\n\`\`\`diff\n${extras.diff}\n\`\`\``);
-  if (extras.discovery) userParts.push(`## discovery\n${extras.discovery}`);
-  userParts.push("Please perform your role now based on the context above.");
-  const system = sysParts.join('\n');
-  const user = userParts.join('\n\n');
-  return system + '\n---USER---\n' + user;
+  const template = readFile(TEMPLATE_PATH) || '';
+  const role = readFile(join(HARNESS_DIR, 'roles', roleFile)) || '';
+  const parts = [`You are the ${buildRoleLabel(roleFile)} for this project. Perform your role.`];
+  parts.push('PROJECT CONTEXT: ' + stripForClaude(template));
+  if (extras.discovery) parts.push('DISCOVERY: ' + stripForClaude(extras.discovery));
+  if (extras.plan) parts.push('PLAN: ' + stripForClaude(extras.plan));
+  if (extras.review) parts.push('REVIEW: ' + stripForClaude(extras.review));
+  if (extras.gate) parts.push('GATE: ' + stripForClaude(extras.gate));
+  if (extras.diff) parts.push('DIFF: ' + stripForClaude(extras.diff));
+  parts.push('ROLE SPEC: ' + stripForClaude(role));
+  return parts.join('\n\n');
 }
 
 function runClaudeRole(roleName, prompt) {
