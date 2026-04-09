@@ -12,10 +12,10 @@ import { streamingRun } from '../streaming-runner.mjs';
  * @param {function} [opts.onStall]
  */
 export async function runGemini(prompt, opts = {}) {
-  const { cwd, dryRun = false, artifactPath, timeoutMs, inactivityMs, onHeartbeat, onStall } = opts;
+  const { cwd, dryRun = false, artifactPath, timeoutMs, inactivityMs, onHeartbeat, onStall, approvalMode = 'plan' } = opts;
   if (dryRun) return '[DRY RUN] gemini';
 
-  const result = await streamingRun('gemini', ['--approval-mode', 'plan', '-p', prompt], {
+  const result = await streamingRun('gemini', ['--approval-mode', approvalMode, '-p', prompt], {
     cwd: cwd || process.cwd(),
     timeoutMs: timeoutMs || 600_000,
     inactivityMs: inactivityMs || 120_000,

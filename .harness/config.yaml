@@ -1,12 +1,13 @@
-# Harness Pipeline Configuration v3.0
-# Initializer Agent가 프로젝트 설정 시 이 파일을 채운다.
-# 직접 편집도 가능하지만, 하네스 상태와 어긋나지 않게 유지해야 한다.
+# Harness Pipeline Configuration v3.1
+# Role-oriented multi-model orchestration is the primary design principle.
+# Default engine assignments reflect model strengths per role.
+# Engine Resolution (Phase 0) confirms availability and applies fallbacks before execution.
 
 harness:
-  version: "3.0"
+  version: "3.1"
   created_at: ""
   last_migrated: null
-  template_version: "v3"
+  template_version: "v3.1"
   adapter_mode: "native-preferred"
 
 project:
@@ -20,21 +21,25 @@ stack:
   test: ""
   package_manager: ""
 
+# === Principle 0: Role-Oriented Multi-Model Orchestration ===
+# Each role maps to the engine best suited for it.
+# These are defaults; Engine Resolution may override based on availability.
+
 agents:
   initializer:
     engine: claude
     role_file: ".harness/roles/initializer.md"
 
   explorer:
-    engine: claude
+    engine: gemini
     role_file: ".harness/roles/code-explorer.md"
 
   architect:
-    engine: claude
+    engine: gemini
     role_file: ".harness/roles/code-architect.md"
 
   planner:
-    engine: claude
+    engine: gemini
     role_file: ".harness/roles/planner.md"
 
   implementer:
@@ -57,8 +62,29 @@ agents:
     engine: claude
     role_file: ".harness/roles/harness-optimizer.md"
 
+# Engine availability — populated by engine-resolver.mjs during Phase 0
+engine_status:
+  gemini: "pending"    # ready | installed-not-authenticated | unavailable | degraded
+  claude: "pending"
+  codex: "pending"
+
+# Fallback chain — applied when default engine is unavailable
+engine_fallback:
+  gemini: ["claude", "codex"]
+  claude: ["codex", "gemini"]
+  codex: ["claude", "gemini"]
+
+# Engine overrides — populated when fallback is applied
+engine_overrides: {}
+# Example when Codex is unavailable:
+# engine_overrides:
+#   reviewer: claude        # was codex, fell back to claude
+#   silent_failure_hunter: claude
+#   pr_test_analyzer: claude
+
 pipeline:
   phases:
+    - engine-resolution   # Phase 0: detect engines, resolve mapping
     - intake
     - audit
     - discover
@@ -76,7 +102,7 @@ pipeline:
     - plan-approved
     - destructive-migration
     - public-deploy
-    - cli-fallback
+    - cli-fallback           # triggered when engine fallback is applied
 
   role_routing:
     adopt_requires:
@@ -131,9 +157,6 @@ budget:
 
 # Anti-stall configuration
 anti_stall:
-  # Streaming output is captured to .harness/artifacts/*-stream-*.log in real-time
   streaming_capture: true
-  # Heartbeat interval during agent execution (seconds)
   heartbeat_interval_seconds: 30
-  # Protected config files that agents must not modify
   config_protection: true

@@ -247,6 +247,13 @@ async function runAgent(agent, prompt, roleName = '', opts = {}) {
   if (opts.allowedTools && agent === 'claude') {
     callOpts.allowedTools = opts.allowedTools;
   }
+  if (agent === 'codex') {
+    callOpts.sandbox = opts.readOnly ? 'read-only' : 'workspace-write';
+    callOpts.approval = opts.readOnly ? 'never' : 'on-request';
+  }
+  if (agent === 'gemini') {
+    callOpts.approvalMode = opts.readOnly ? 'plan' : 'autoEdit';
+  }
 
   if (agent === 'claude') return runClaude(prompt, callOpts);
   if (agent === 'codex') return runCodex(prompt, callOpts);
@@ -265,6 +272,7 @@ async function runDiscovery(config, timestamp, budgetConfig) {
     timeoutMs: budgetConfig.agentTimeoutMs,
     inactivityMs: budgetConfig.inactivityMs,
     allowedTools: READ_ONLY_TOOLS,
+    readOnly: true,
   }), (_error, fb) => sendHeartbeat('discover', `fallback to ${fb}`));
   writeArtifact('discover', timestamp, output);
   return output;
@@ -281,6 +289,7 @@ async function runPlanning(config, timestamp, discovery, budgetConfig) {
     timeoutMs: budgetConfig.agentTimeoutMs,
     inactivityMs: budgetConfig.inactivityMs,
     allowedTools: READ_ONLY_TOOLS,
+    readOnly: true,
   }), (_error, fb) => sendHeartbeat('plan', `fallback to ${fb}`));
   writeArtifact('plan', timestamp, output);
   return output;
@@ -317,6 +326,7 @@ async function runReview(config, timestamp, plan, gateOutput, budgetConfig) {
     timeoutMs: budgetConfig.agentTimeoutMs,
     inactivityMs: budgetConfig.inactivityMs,
     allowedTools: READ_ONLY_TOOLS,
+    readOnly: true,
   });
   writeArtifact('review', timestamp, output);
   return output;
@@ -511,7 +521,7 @@ async function main() {
     appendNotification(HARNESS_DIR, failEvent);
     writeLatestNotification(HARNESS_DIR, failEvent);
     try { execSync(buildNotifierCommand(HARNESS_DIR, failEvent.phase, failEvent.status, failEvent.summary), { cwd: PROJECT_ROOT, stdio: 'ignore', timeout: 15000 }); } catch {}
-    error(nextState.summary);
+    fail(nextState.summary);
     process.exit(1);
   }
 

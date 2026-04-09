@@ -2,19 +2,27 @@ import { streamingRun } from '../streaming-runner.mjs';
 
 // Claude CLI can trigger tool-use when prompt contains file paths or markdown.
 // Sanitize prompt to plain prose before passing to claude --print.
-function sanitize(prompt) {
-  return prompt
+// NOTE: When allowedTools is set, tools are already restricted at the CLI level,
+// so aggressive path stripping is unnecessary and destroys planning context.
+function sanitize(prompt, { preservePaths = false } = {}) {
+  let text = prompt
     .replace(/^#{1,6}\s+/gm, '')
-    .replace(/(?<![`\w])\.\/[^^\s)]+/g, '<path>')
-    .replace(/(?<![`\w])\.[a-zA-Z/_-]+\/[^\s)]+/g, '<path>')
-    .replace(/(?<![`\w])\/[a-zA-Z][^\s)]{2,}/g, '<path>')
-    .replace(/`[./][^`]+`/g, '<path>')
-    .replace(/```[\w]*\n[\s\S]*?```/g, '[code block omitted]')
-    .replace(/`([^`]+)`/g, '$1')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\*([^*]+)\*/g, '$1')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+    .replace(/\n{3,}/g, '\n\n');
+
+  if (!preservePaths) {
+    // Aggressive path removal — only when tools are unrestricted
+    text = text
+      .replace(/(?<![`\w])\.\/[^^\s)]+/g, '<path>')
+      .replace(/(?<![`\w])\.[a-zA-Z/_-]+\/[^\s)]+/g, '<path>')
+      .replace(/(?<![`\w])\/[a-zA-Z][^\s)]{2,}/g, '<path>')
+      .replace(/`[./][^`]+`/g, '<path>')
+      .replace(/```[\w]*\n[\s\S]*?```/g, '[code block omitted]')
+      .replace(/`([^`]+)`/g, '$1');
+  }
+
+  return text.trim();
 }
 
 /**
@@ -33,8 +41,9 @@ export async function runClaude(prompt, opts = {}) {
   const { cwd, dryRun = false, artifactPath, timeoutMs, inactivityMs, allowedTools, onHeartbeat, onStall } = opts;
   if (dryRun) return '[DRY RUN] claude';
 
-  const safe = sanitize(prompt);
+  const safe = sanitize(prompt, { preservePaths: !!(allowedTools && allowedTools.length > 0) });
   const args = [
+    '--bare',
     '--permission-mode', 'bypassPermissions',
     '--print',
   ];

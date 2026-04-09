@@ -12,10 +12,10 @@ import { streamingRun } from '../streaming-runner.mjs';
  * @param {function} [opts.onStall]
  */
 export async function runCodex(prompt, opts = {}) {
-  const { cwd, dryRun = false, artifactPath, timeoutMs, inactivityMs, onHeartbeat, onStall } = opts;
+  const { cwd, dryRun = false, artifactPath, timeoutMs, inactivityMs, onHeartbeat, onStall, sandbox = 'read-only', approval = 'on-request' } = opts;
   if (dryRun) return '[DRY RUN] codex';
 
-  const result = await streamingRun('codex', ['exec', prompt], {
+  const result = await streamingRun('codex', ['exec', '--sandbox', sandbox, '-a', approval, prompt], {
     cwd: cwd || process.cwd(),
     timeoutMs: timeoutMs || 600_000,
     inactivityMs: inactivityMs || 120_000,
